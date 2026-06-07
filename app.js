@@ -92,7 +92,7 @@ const defaultState = {
   config: {
     limiteGastosGerais: 5500,
     googleSheetId: "1qcV1LaaIL-ZBQ3DmImjAEmBZk5Dh_sWD1GX8JT9Obwk",
-    appsScriptUrl: "",
+    appsScriptUrl: "https://script.google.com/macros/s/AKfycbyzaPJQykxUagZVyqMyKorcCkgz3_lh8J-yJmnj_7-ZcoWwnOrXbcyIA1_f4bVWVlhxcQ/exec",
   },
   receitas: [
     sample("receitas", {
