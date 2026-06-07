@@ -365,7 +365,8 @@ function populateCategorySelects() {
   document.querySelectorAll('select[name="categoria"]').forEach((select) => {
     select.innerHTML = categories.map((category) => `<option>${category}</option>`).join("");
   });
-}\n
+}
+
 function render() {
   renderDashboard();
   renderReceitas();
