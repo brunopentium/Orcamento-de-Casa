@@ -130,6 +130,20 @@ button {
   font-size: 26px;
 }
 
+.sync-status {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sync-status.ok {
+  color: var(--ok);
+}
+
+.sync-status.error {
+  color: var(--danger);
+}
+
 .month-picker {
   display: flex;
   align-items: center;
