@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orcamento de Casa</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">OC</div>
+        <div>
+          <h1>Orcamento de Casa</h1>
+          <p>Planejado vs realizado</p>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Navegacao principal">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="receitas">Receitas</button>
+        <button class="nav-item" data-view="despesas">Despesas gerais</button>
+        <button class="nav-item" data-view="cartoes">Cartoes</button>
+        <button class="nav-item" data-view="gastos">Gastos gerais</button>
+        <button class="nav-item" data-view="config">Configuracoes</button>
+      </nav>
+    </aside>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Mes ativo</p>
+          <h2 id="pageTitle">Dashboard</h2>
+        </div>
+        <div class="month-picker">
+          <button class="icon-button" id="prevMonth" aria-label="Mes anterior">&lt;</button>
+          <input id="monthInput" type="month" />
+          <button class="icon-button" id="nextMonth" aria-label="Proximo mes">&gt;</button>
+        </div>
+      </header>
+
+      <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
+        <div class="summary-grid">
+          <article class="metric">
+            <span>Receitas previstas</span>
+            <strong id="metricReceitasPrevistas">R$ 0,00</strong>
+            <small id="metricReceitasRecebidas">Recebido: R$ 0,00</small>
+          </article>
+          <article class="metric">
+            <span>Despesas previstas</span>
+            <strong id="metricDespesasPrevistas">R$ 0,00</strong>
+            <small id="metricDespesasPagas">Pago: R$ 0,00</small>
+          </article>
+          <article class="metric">
+            <span>Cartoes previstos</span>
+            <strong id="metricCartoesPrevistos">R$ 0,00</strong>
+            <small id="metricCartoesPagos">Pago: R$ 0,00</small>
+          </article>
+          <article class="metric accent">
+            <span>Saldo previsto</span>
+            <strong id="metricSaldoPrevisto">R$ 0,00</strong>
+            <small id="metricSaldoReal">Saldo atual: R$ 0,00</small>
+          </article>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>Envelope de gastos gerais</h3>
+              <p>Controle do consumo diario dentro do valor separado no mes.</p>
+            </div>
+            <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="gastosProgress"></div>
+          </div>
+          <div class="progress-labels">
+            <span id="gastosUsado">Usado: R$ 0,00</span>
+            <span id="gastosLimite">Limite: R$ 5.500,00</span>
+          </div>
+        </section>
+
+        <section class="dashboard-columns">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Proximas despesas</h3>
+            </div>
+            <div class="list" id="upcomingList"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Resumo por categoria</h3>
+            </div>
+            <div class="list" id="categoryList"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="view" id="receitasView">
+        <div class="panel">
+          <div class="panel-heading">
+            <h3>Receitas do mes</h3>
+            <button class="primary-button" data-open-form="receita">Adicionar receita</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Descricao</th>
+                  <th>Previsto</th>
+                  <th>Recebido</th>
+                  <th>Data</th>
+                  <th>Status</th>
+                  <th>Recorrencia</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="receitasTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="despesasView">
+        <div class="panel">
+          <div class="panel-heading">
+            <h3>Despesas gerais</h3>
+            <button class="primary-button" data-open-form="despesa">Adicionar despesa</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Descricao</th>
+                  <th>Categoria</th>
+                  <th>Previsto</th>
+                  <th>Pago</th>
+                  <th>Vencimento</th>
+                  <th>Status</th>
+                  <th>Recorrencia</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="despesasTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="cartoesView">
+        <div class="section-grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Faturas</h3>
+              <button class="primary-button" data-open-form="fatura">Adicionar fatura</button>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cartao</th>
+                    <th>Vencimento</th>
+                    <th>Previsto</th>
+                    <th>Pago</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="faturasTable"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Compras e parcelas</h3>
+              <button class="primary-button" data-open-form="compra">Adicionar compra</button>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Descricao</th>
+                    <th>Cartao</th>
+                    <th>Total</th>
+                    <th>Parcelas</th>
+                    <th>1a fatura</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="comprasTable"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="gastosView">
+        <div class="quick-layout">
+          <form class="panel quick-form" id="gastoRapidoForm">
+            <div class="panel-heading">
+              <h3>Lancamento rapido</h3>
+            </div>
+            <label>
+              Data
+              <input type="date" name="data" required />
+            </label>
+            <label>
+              Descricao
+              <input type="text" name="descricao" placeholder="Mercado, gasolina, farmacia..." required />
+            </label>
+            <label>
+              Categoria
+              <select name="categoria" required></select>
+            </label>
+            <label>
+              Valor
+              <input type="number" name="valor" min="0" step="0.01" required />
+            </label>
+            <label>
+              Forma de pagamento
+              <select name="formaPagamento">
+                <option>Pix</option>
+                <option>Debito</option>
+                <option>Credito</option>
+                <option>Dinheiro</option>
+              </select>
+            </label>
+            <button class="primary-button" type="submit">Registrar gasto</button>
+          </form>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Gastos do mes</h3>
+              <button class="secondary-button" data-open-form="gasto">Adicionar completo</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Descricao</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Forma</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="gastosTable"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="configView">
+        <div class="section-grid">
+          <form class="panel" id="configForm">
+            <div class="panel-heading">
+              <h3>Configuracoes do mes</h3>
+            </div>
+            <label>
+              Limite dos gastos gerais
+              <input type="number" name="limiteGastosGerais" min="0" step="0.01" />
+            </label>
+            <label>
+              ID da planilha Google
+              <input type="text" name="googleSheetId" placeholder="Sera usado na integracao" />
+            </label>
+            <label>
+              URL do Apps Script
+              <input type="url" name="appsScriptUrl" placeholder="Endpoint futuro do web app" />
+            </label>
+            <button class="primary-button" type="submit">Salvar configuracoes</button>
+          </form>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Estrutura Google Sheets</h3>
+            </div>
+            <div class="sheet-schema">
+              <p><strong>Abas previstas:</strong> configuracoes, meses, receitas, despesas, cartoes, faturas_cartao, compras_cartao, gastos_gerais, categorias.</p>
+              <p>Esta primeira versao usa armazenamento local no navegador e ja mantem os campos alinhados para migrar para a planilha.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="entryDialog">
+      <form method="dialog" class="dialog-card" id="entryForm">
+        <div class="dialog-heading">
+          <h3 id="dialogTitle">Novo lancamento</h3>
+          <button class="icon-button" value="cancel" aria-label="Fechar">x</button>
+        </div>
+        <div class="form-grid" id="dialogFields"></div>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancelar</button>
+          <button class="primary-button" id="saveEntryButton" value="default">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
