@@ -126,6 +126,8 @@ const defaultState = {
   gastos: [],
 };
 
+const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos"];
+
 let state = loadState();
 let activeMonth = monthKey(new Date());
 let currentFormType = null;
@@ -140,6 +142,7 @@ const dom = {
   dialogFields: document.querySelector("#dialogFields"),
   gastoRapidoForm: document.querySelector("#gastoRapidoForm"),
   configForm: document.querySelector("#configForm"),
+  syncStatus: document.querySelector("#syncStatus"),
 };
 
 function sample(collection, data) {
@@ -157,7 +160,7 @@ function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return structuredClone(defaultState);
   try {
-    return { ...structuredClone(defaultState), ...JSON.parse(raw) };
+    return mergeState(JSON.parse(raw));
   } catch {
     return structuredClone(defaultState);
   }
@@ -165,6 +168,93 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function mergeState(nextState) {
+  const base = structuredClone(defaultState);
+  const merged = { ...base, ...nextState };
+  merged.config = { ...base.config, ...(nextState.config || {}) };
+  syncedCollections.forEach((collection) => {
+    merged[collection] = Array.isArray(nextState[collection]) ? nextState[collection] : base[collection];
+  });
+  return merged;
+}
+
+function mergeRemoteState(remoteState) {
+  const localState = state;
+  const merged = mergeState(remoteState || {});
+
+  merged.config = {
+    ...structuredClone(defaultState).config,
+    ...(remoteState?.config || {}),
+    googleSheetId: state.config.googleSheetId || defaultState.config.googleSheetId,
+    appsScriptUrl: state.config.appsScriptUrl || defaultState.config.appsScriptUrl,
+  };
+
+  syncedCollections.forEach((collection) => {
+    const remoteRows = Array.isArray(remoteState?.[collection]) ? remoteState[collection] : [];
+    const remoteIds = new Set(remoteRows.map((item) => String(item.id)));
+    const localExtras = (localState[collection] || []).filter((item) => item.id && !remoteIds.has(String(item.id)) && !isSeedRow(collection, item));
+    merged[collection] = [...remoteRows, ...localExtras];
+  });
+
+  return merged;
+}
+
+function isSeedRow(collection, item) {
+  return (
+    (collection === "receitas" && item.descricao === "Salario" && parseMoney(item.valorPrevisto) === 0) ||
+    (collection === "despesas" && item.descricao === "Gastos gerais do mes" && parseMoney(item.valorPrevisto) === 5500)
+  );
+}
+
+function setSyncStatus(message, variant = "") {
+  if (!dom.syncStatus) return;
+  dom.syncStatus.textContent = message;
+  dom.syncStatus.className = `sync-status ${variant}`.trim();
+}
+
+async function persistState(message = "Sincronizando com Google Sheets...") {
+  saveState();
+  setSyncStatus(message);
+
+  const result = await new GoogleSheetsGateway(state.config).sync(state);
+  if (result.ok) {
+    setSyncStatus(`Sincronizado com Google Sheets as ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, "ok");
+    return result;
+  }
+
+  setSyncStatus(`Salvo localmente. Falha na planilha: ${result.error || result.reason || "verifique a configuracao"}`, "error");
+  return result;
+}
+
+async function loadFromSheets() {
+  const gateway = new GoogleSheetsGateway(state.config);
+  const result = await gateway.readAll();
+
+  if (!result.ok) {
+    setSyncStatus(`Usando copia local. ${result.error || result.reason || "Nao foi possivel ler a planilha."}`, "error");
+    return;
+  }
+
+  const previousState = state;
+  state = mergeRemoteState(result.data);
+  saveState();
+  render();
+
+  if (hasLocalRowsNotInRemote(previousState, result.data)) {
+    await persistState("Enviando lancamentos locais pendentes...");
+    return;
+  }
+
+  setSyncStatus(`Dados carregados do Google Sheets as ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, "ok");
+}
+
+function hasLocalRowsNotInRemote(localState, remoteState) {
+  return syncedCollections.some((collection) => {
+    const remoteIds = new Set((remoteState?.[collection] || []).map((item) => String(item.id)));
+    return (localState[collection] || []).some((item) => item.id && !remoteIds.has(String(item.id)) && !isSeedRow(collection, item));
+  });
 }
 
 function money(value) {
@@ -207,6 +297,7 @@ function init() {
   populateCategorySelects();
   bindEvents();
   render();
+  loadFromSheets();
 }
 
 function bindEvents() {
@@ -437,7 +528,7 @@ function actions(type, id, completeLabel) {
   `;
 }
 
-function handleRowAction(event) {
+async function handleRowAction(event) {
   const { action, type, id } = event.currentTarget.dataset;
   const schema = formSchemas[type];
   const item = state[schema.collection].find((entry) => entry.id === id);
@@ -446,8 +537,8 @@ function handleRowAction(event) {
   if (action === "edit") openEntryForm(type, id);
   if (action === "delete") {
     state[schema.collection] = state[schema.collection].filter((entry) => entry.id !== id);
-    saveState();
     render();
+    await persistState("Excluindo na planilha...");
   }
   if (action === "complete") {
     const expected = item.valorPrevisto || item.valorTotal || item.valor;
@@ -456,8 +547,8 @@ function handleRowAction(event) {
     item.dataPagamento = item.dataPagamento || new Date().toISOString().slice(0, 10);
     item.dataRealizada = item.dataRealizada || new Date().toISOString().slice(0, 10);
     item.updatedAt = new Date().toISOString();
-    saveState();
     render();
+    await persistState("Atualizando pagamento na planilha...");
   }
 }
 
@@ -500,7 +591,7 @@ function defaultFieldValue(name, type) {
   return "";
 }
 
-function handleEntrySubmit(event) {
+async function handleEntrySubmit(event) {
   event.preventDefault();
   const schema = formSchemas[currentFormType];
   const data = Object.fromEntries(new FormData(dom.entryForm).entries());
@@ -522,16 +613,16 @@ function handleEntrySubmit(event) {
     });
   }
 
-  saveState();
   render();
   dom.entryDialog.close();
+  await persistState("Salvando lancamento na planilha...");
 }
 
 function inferMonth(data) {
   return String(data.primeiraFatura || data.data || data.vencimento || data.dataPrevista || activeMonth).slice(0, 7);
 }
 
-function handleQuickGasto(event) {
+async function handleQuickGasto(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(dom.gastoRapidoForm).entries());
   state.gastos.push({
@@ -547,19 +638,19 @@ function handleQuickGasto(event) {
   dom.gastoRapidoForm.reset();
   dom.gastoRapidoForm.data.value = new Date().toISOString().slice(0, 10);
   populateCategorySelects();
-  saveState();
   render();
+  await persistState("Salvando gasto na planilha...");
 }
 
-function handleConfigSubmit(event) {
+async function handleConfigSubmit(event) {
   event.preventDefault();
   state.config = {
     limiteGastosGerais: parseMoney(dom.configForm.limiteGastosGerais.value),
     googleSheetId: dom.configForm.googleSheetId.value.trim(),
     appsScriptUrl: dom.configForm.appsScriptUrl.value.trim(),
   };
-  saveState();
   render();
+  await persistState("Salvando configuracoes na planilha...");
 }
 
 function statusBadge(status) {
@@ -589,15 +680,37 @@ class GoogleSheetsGateway {
     this.config = config;
   }
 
-  async sync() {
+  async readAll() {
     if (!this.config.appsScriptUrl) {
       return { ok: false, reason: "Endpoint do Apps Script ainda nao configurado." };
     }
-    return fetch(this.config.appsScriptUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "sync", payload: state }),
-    }).then((response) => response.json());
+
+    try {
+      const url = new URL(this.config.appsScriptUrl);
+      url.searchParams.set("action", "readAll");
+      url.searchParams.set("_", Date.now());
+      const response = await fetch(url.toString());
+      return response.json();
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  async sync(payload) {
+    if (!this.config.appsScriptUrl) {
+      return { ok: false, reason: "Endpoint do Apps Script ainda nao configurado." };
+    }
+
+    try {
+      const response = await fetch(this.config.appsScriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "sync", payload }),
+      });
+      return response.json();
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 }
 
