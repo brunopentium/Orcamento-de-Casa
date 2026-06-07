@@ -127,6 +127,7 @@ const defaultState = {
 };
 
 const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos"];
+const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "dataPagamento", "primeiraFatura"];
 
 let state = loadState();
 let activeMonth = monthKey(new Date());
@@ -175,9 +176,22 @@ function mergeState(nextState) {
   const merged = { ...base, ...nextState };
   merged.config = { ...base.config, ...(nextState.config || {}) };
   syncedCollections.forEach((collection) => {
-    merged[collection] = Array.isArray(nextState[collection]) ? nextState[collection] : base[collection];
+    merged[collection] = (Array.isArray(nextState[collection]) ? nextState[collection] : base[collection]).map(normalizeRow);
   });
   return merged;
+}
+
+function normalizeRow(row) {
+  const normalized = { ...row };
+  if (normalized.month) normalized.month = String(normalized.month).slice(0, 7);
+  dateFields.forEach((field) => {
+    if (normalized[field]) normalized[field] = String(normalized[field]).slice(0, field === "primeiraFatura" ? 7 : 10);
+  });
+  return normalized;
+}
+
+function sanitizeStateForSheets(nextState) {
+  return mergeState(nextState);
 }
 
 function mergeRemoteState(remoteState) {
@@ -192,7 +206,7 @@ function mergeRemoteState(remoteState) {
   };
 
   syncedCollections.forEach((collection) => {
-    const remoteRows = Array.isArray(remoteState?.[collection]) ? remoteState[collection] : [];
+    const remoteRows = (Array.isArray(remoteState?.[collection]) ? remoteState[collection] : []).map(normalizeRow);
     const remoteIds = new Set(remoteRows.map((item) => String(item.id)));
     const localExtras = (localState[collection] || []).filter((item) => item.id && !remoteIds.has(String(item.id)) && !isSeedRow(collection, item));
     merged[collection] = [...remoteRows, ...localExtras];
@@ -351,8 +365,7 @@ function populateCategorySelects() {
   document.querySelectorAll('select[name="categoria"]').forEach((select) => {
     select.innerHTML = categories.map((category) => `<option>${category}</option>`).join("");
   });
-}
-
+}\n
 function render() {
   renderDashboard();
   renderReceitas();
@@ -705,7 +718,7 @@ class GoogleSheetsGateway {
       const response = await fetch(this.config.appsScriptUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "sync", payload }),
+        body: JSON.stringify({ action: "sync", payload: sanitizeStateForSheets(payload) }),
       });
       return response.json();
     } catch (error) {
