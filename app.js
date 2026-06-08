@@ -729,6 +729,7 @@ function cardInvoiceActions(item) {
     <div class="row-actions">
       ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
       <button class="small-button" data-action="edit-card" data-card="${escapeHtml(item.cartao)}">Editar cartao</button>
+      <button class="danger-button" data-action="delete-card" data-card="${escapeHtml(item.cartao)}">Excluir cartao</button>
     </div>
   `;
 }
@@ -745,6 +746,11 @@ async function handleRowAction(event) {
   if (action === "edit-card") {
     const item = (state.cartoes || []).find((entry) => cardName(entry) === card);
     if (item) openEntryForm("cartao", item.id);
+    return;
+  }
+
+  if (action === "delete-card") {
+    await deleteCard(card);
     return;
   }
 
@@ -773,6 +779,24 @@ async function handleRowAction(event) {
     render();
     await persistState("Atualizando pagamento na planilha...");
   }
+}
+
+async function deleteCard(card) {
+  const purchases = (state.compras || []).filter((item) => item.cartao === card).length;
+  const invoices = (state.faturas || []).filter((item) => item.cartao === card).length;
+  const message = `Excluir o cartao "${card}"? Isso tambem remove ${purchases} compra(s)/parcela(s) e ${invoices} fatura(s) vinculada(s).`;
+  if (!window.confirm(message)) return;
+
+  state.cartoes = (state.cartoes || []).filter((entry) => cardName(entry) !== card);
+  state.compras = (state.compras || []).filter((entry) => entry.cartao !== card);
+  state.faturas = (state.faturas || []).filter((entry) => entry.cartao !== card);
+
+  if (activeCardName === card) {
+    activeCardName = getCardNames()[0] || "";
+  }
+
+  render();
+  await persistState("Excluindo cartao na planilha...");
 }
 
 async function markCardInvoicePaid(card) {
