@@ -61,6 +61,18 @@ const formSchemas = {
       ["observacoes", "Observacoes", "textarea", false],
     ],
   },
+  cartao: {
+    title: "Cartao",
+    collection: "cartoes",
+    fields: [
+      ["nome", "Nome do cartao", "text", true],
+      ["limite", "Limite", "number", false],
+      ["vencimentoDia", "Dia de vencimento", "number", false],
+      ["fechamentoDia", "Dia de fechamento", "number", false],
+      ["ativo", "Ativo", "select", true, ["sim", "nao"]],
+      ["observacoes", "Observacoes", "textarea", false],
+    ],
+  },
   compra: {
     title: "Compra no cartao",
     collection: "compras",
@@ -121,6 +133,7 @@ const defaultState = {
       observacoes: "Envelope para mercado, gasolina, Uber, farmacia e gastos do dia a dia.",
     }),
   ],
+  cartoes: [],
   faturas: [],
   compras: [],
   gastos: [],
@@ -131,6 +144,7 @@ const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "data
 
 let state = loadState();
 let activeMonth = monthKey(new Date());
+let activeCardName = "";
 let currentFormType = null;
 let editingId = null;
 
@@ -306,6 +320,93 @@ function sum(items, key) {
   return items.reduce((total, item) => total + parseMoney(item[key]), 0);
 }
 
+function addMonths(month, amount) {
+  const [year, monthNumber] = String(month).slice(0, 7).split("-").map(Number);
+  const date = new Date(year, monthNumber - 1 + amount, 1);
+  return monthKey(date);
+}
+
+function monthDiff(startMonth, endMonth) {
+  const [startYear, start] = String(startMonth).slice(0, 7).split("-").map(Number);
+  const [endYear, end] = String(endMonth).slice(0, 7).split("-").map(Number);
+  return (endYear - startYear) * 12 + (end - start);
+}
+
+function cardName(card) {
+  return card?.nome || card?.cartao || card?.descricao || "";
+}
+
+function getCardNames() {
+  const names = new Set();
+  (state.cartoes || []).forEach((card) => {
+    const name = cardName(card);
+    const isActive = !card.ativo || String(card.ativo).toLowerCase() !== "nao";
+    if (name && isActive) names.add(name);
+  });
+  state.compras.forEach((item) => {
+    if (item.cartao) names.add(item.cartao);
+  });
+  state.faturas.forEach((item) => {
+    if (item.cartao) names.add(item.cartao);
+  });
+  return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function purchaseInstallmentForMonth(item, targetMonth = activeMonth) {
+  const firstMonth = String(item.primeiraFatura || item.month || "").slice(0, 7);
+  const installments = Math.max(Number.parseInt(item.parcelas, 10) || 1, 1);
+  if (!firstMonth) return null;
+
+  const index = monthDiff(firstMonth, targetMonth);
+  if (index < 0 || index >= installments) return null;
+
+  const amount = parseMoney(item.valorTotal) / installments;
+  return {
+    ...item,
+    parcelaAtual: index + 1,
+    valorParcela: amount,
+    faturaMes: targetMonth,
+  };
+}
+
+function cardPurchasesForMonth(card, targetMonth = activeMonth) {
+  return state.compras
+    .filter((item) => item.cartao === card)
+    .map((item) => purchaseInstallmentForMonth(item, targetMonth))
+    .filter(Boolean);
+}
+
+function invoiceForCardMonth(card, targetMonth = activeMonth) {
+  return state.faturas.find((item) => item.cartao === card && String(item.month || item.vencimento || "").slice(0, 7) === targetMonth);
+}
+
+function cardDueDate(card, invoice, targetMonth = activeMonth) {
+  if (invoice?.vencimento) return invoice.vencimento;
+  const cardRow = (state.cartoes || []).find((item) => cardName(item) === card);
+  const day = Math.min(Math.max(Number.parseInt(cardRow?.vencimentoDia, 10) || 28, 1), 31);
+  return `${targetMonth}-${String(day).padStart(2, "0")}`;
+}
+
+function calculatedCardInvoices(targetMonth = activeMonth) {
+  return getCardNames().map((card) => {
+    const purchases = cardPurchasesForMonth(card, targetMonth);
+    const invoice = invoiceForCardMonth(card, targetMonth);
+    const total = purchases.reduce((acc, item) => acc + item.valorParcela, 0);
+    const paid = invoice?.status === "pago" ? total : parseMoney(invoice?.valorRealizado);
+
+    return {
+      id: invoice?.id || `calculated-${card}-${targetMonth}`,
+      cartao: card,
+      vencimento: cardDueDate(card, invoice, targetMonth),
+      valorPrevisto: total,
+      valorRealizado: paid,
+      status: invoice?.status || "previsto",
+      sourceInvoiceId: invoice?.id || "",
+      purchaseCount: purchases.length,
+    };
+  });
+}
+
 function init() {
   dom.monthInput.value = activeMonth;
   populateCategorySelects();
@@ -379,7 +480,7 @@ function render() {
 function renderDashboard() {
   const receitas = monthItems("receitas");
   const despesas = monthItems("despesas");
-  const faturas = monthItems("faturas");
+  const faturas = calculatedCardInvoices().filter((item) => item.valorPrevisto || item.valorRealizado);
   const gastos = monthItems("gastos");
 
   const receitasPrevistas = sum(receitas, "valorPrevisto");
@@ -481,19 +582,26 @@ function renderDespesas() {
 }
 
 function renderCartoes() {
-  renderRows("faturasTable", monthItems("faturas"), (item) => [
-    item.cartao,
+  const invoices = calculatedCardInvoices();
+  if (!activeCardName || !getCardNames().includes(activeCardName)) {
+    activeCardName = invoices[0]?.cartao || getCardNames()[0] || "";
+  }
+
+  renderRows("faturasTable", invoices, (item) => [
+    `<button class="link-button ${item.cartao === activeCardName ? "active" : ""}" data-action="select-card" data-card="${escapeHtml(item.cartao)}">${escapeHtml(item.cartao)}</button>`,
     item.vencimento,
     money(item.valorPrevisto),
     money(item.valorRealizado),
     statusBadge(item.status),
-    actions("fatura", item.id, item.status !== "pago" ? "Marcar paga" : ""),
+    cardInvoiceActions(item),
   ]);
-  renderRows("comprasTable", state.compras, (item) => [
+
+  const purchases = activeCardName ? cardPurchasesForMonth(activeCardName) : [];
+  renderRows("comprasTable", purchases, (item) => [
     item.descricao,
-    item.cartao,
+    money(item.valorParcela),
+    `${item.parcelaAtual}/${item.parcelas || 1}`,
     money(item.valorTotal),
-    `${item.parcelas || 1}x de ${money(parseMoney(item.valorTotal) / Math.max(parseMoney(item.parcelas), 1))}`,
     item.primeiraFatura,
     actions("compra", item.id, ""),
   ]);
@@ -542,8 +650,35 @@ function actions(type, id, completeLabel) {
   `;
 }
 
+function cardInvoiceActions(item) {
+  return `
+    <div class="row-actions">
+      ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
+      <button class="small-button" data-action="edit-card" data-card="${escapeHtml(item.cartao)}">Editar cartao</button>
+    </div>
+  `;
+}
+
 async function handleRowAction(event) {
-  const { action, type, id } = event.currentTarget.dataset;
+  const { action, type, id, card } = event.currentTarget.dataset;
+
+  if (action === "select-card") {
+    activeCardName = card;
+    renderCartoes();
+    return;
+  }
+
+  if (action === "edit-card") {
+    const item = (state.cartoes || []).find((entry) => cardName(entry) === card);
+    if (item) openEntryForm("cartao", item.id);
+    return;
+  }
+
+  if (action === "pay-card-invoice") {
+    await markCardInvoicePaid(card);
+    return;
+  }
+
   const schema = formSchemas[type];
   const item = state[schema.collection].find((entry) => entry.id === id);
   if (!item) return;
@@ -566,6 +701,36 @@ async function handleRowAction(event) {
   }
 }
 
+async function markCardInvoicePaid(card) {
+  const invoiceSummary = calculatedCardInvoices().find((item) => item.cartao === card);
+  if (!invoiceSummary) return;
+
+  let invoice = invoiceForCardMonth(card);
+  if (!invoice) {
+    invoice = {
+      id: crypto.randomUUID(),
+      collection: "faturas",
+      month: activeMonth,
+      cartao: card,
+      vencimento: invoiceSummary.vencimento,
+      observacoes: "Fatura criada automaticamente a partir das compras e parcelas do mes.",
+      createdAt: new Date().toISOString(),
+    };
+    state.faturas.push(invoice);
+  }
+
+  Object.assign(invoice, {
+    month: activeMonth,
+    valorPrevisto: invoiceSummary.valorPrevisto,
+    valorRealizado: invoiceSummary.valorPrevisto,
+    status: "pago",
+    updatedAt: new Date().toISOString(),
+  });
+
+  render();
+  await persistState("Atualizando pagamento da fatura na planilha...");
+}
+
 function openEntryForm(type, id = null) {
   currentFormType = type;
   editingId = id;
@@ -579,6 +744,18 @@ function openEntryForm(type, id = null) {
 function renderField([name, label, type, required, options], item) {
   const value = item?.[name] ?? defaultFieldValue(name, type);
   const requiredAttr = required ? "required" : "";
+  if (name === "cartao" && type === "text") {
+    const cards = getCardNames();
+    if (cards.length) {
+      return `
+        <label>${label}
+          <select name="${name}" ${requiredAttr}>
+            ${cards.map((option) => `<option ${String(value || activeCardName) === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+  }
   if (type === "select" || type === "category") {
     const source = type === "category" ? categories : options;
     return `
