@@ -212,7 +212,6 @@ function sanitizeStateForSheets(nextState) {
 }
 
 function mergeRemoteState(remoteState) {
-  const localState = state;
   const merged = mergeState(remoteState || {});
 
   merged.config = {
@@ -224,9 +223,9 @@ function mergeRemoteState(remoteState) {
 
   syncedCollections.forEach((collection) => {
     const remoteRows = (Array.isArray(remoteState?.[collection]) ? remoteState[collection] : []).map(normalizeRow);
-    const remoteIds = new Set(remoteRows.map((item) => String(item.id)));
-    const localExtras = (localState[collection] || []).filter((item) => item.id && !remoteIds.has(String(item.id)) && !isSeedRow(collection, item));
-    merged[collection] = [...remoteRows, ...localExtras];
+    if (Array.isArray(remoteState?.[collection])) {
+      merged[collection] = remoteRows;
+    }
   });
 
   return merged;
