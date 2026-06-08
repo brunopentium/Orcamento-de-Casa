@@ -14,6 +14,15 @@ Esta primeira versao do app ainda pode usar `localStorage` enquanto o Apps Scrip
 | --- | --- | --- |
 | chave | limiteGastosGerais | Nome da configuracao |
 | valor | 5500 | Valor da configuracao |
+| observacao | Envelope mensal de gastos gerais | Nota livre |
+| id | limiteGastosGerais | Identificador para atualizacao via endpoint |
+
+Chaves usadas pelo app:
+
+- `limiteGastosGerais`: envelope mensal para mercado, gasolina, Uber, farmacia e gastos do dia a dia.
+- `saldoRealConta`: saldo real informado manualmente para comparar com o saldo atual calculado pelo app.
+- `googleSheetId`: ID da planilha usada como banco.
+- `appsScriptUrl`: endpoint do Apps Script publicado.
 
 ## meses
 

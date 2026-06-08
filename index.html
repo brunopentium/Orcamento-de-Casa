@@ -62,6 +62,26 @@
             <strong id="metricSaldoPrevisto">R$ 0,00</strong>
             <small id="metricSaldoReal">Saldo atual: R$ 0,00</small>
           </article>
+          <article class="metric">
+            <span>Receitas recebidas</span>
+            <strong id="metricReceitasAtuais">R$ 0,00</strong>
+            <small>Entradas confirmadas no mes</small>
+          </article>
+          <article class="metric">
+            <span>Despesas pagas</span>
+            <strong id="metricDespesasAtuais">R$ 0,00</strong>
+            <small id="metricDespesasAtuaisDetalhe">Pagas e lancadas: R$ 0,00</small>
+          </article>
+          <article class="metric accent">
+            <span>Saldo atual no app</span>
+            <strong id="metricSaldoAtualApp">R$ 0,00</strong>
+            <small id="metricSaldoContaReal">Conta informada: R$ 0,00</small>
+          </article>
+          <article class="metric" id="metricDiferencaCard">
+            <span>Diferenca a conferir</span>
+            <strong id="metricDiferencaConta">R$ 0,00</strong>
+            <small>Conta real menos saldo do app</small>
+          </article>
         </div>
 
         <section class="panel">
@@ -284,6 +304,10 @@
               <input type="number" name="limiteGastosGerais" min="0" step="0.01" />
             </label>
             <label>
+              Saldo real da conta
+              <input type="number" name="saldoRealConta" step="0.01" />
+            </label>
+            <label>
               ID da planilha Google
               <input type="text" name="googleSheetId" placeholder="Sera usado na integracao" />
             </label>
@@ -321,6 +345,6 @@
       </form>
     </dialog>
 
-    <script src="app.js?v=20260608-cartoes3"></script>
+    <script src="app.js?v=20260608-dashboard1"></script>
   </body>
 </html>
