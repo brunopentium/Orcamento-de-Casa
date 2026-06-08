@@ -102,6 +102,7 @@ Use esta aba para as despesas gerais do mes, incluindo a linha do envelope `Gast
 | createdAt |
 | updatedAt |
 | recorrenciaCartao |
+| parcelaAtualCadastro |
 
 ## gastos_gerais
 

@@ -84,6 +84,7 @@ const formSchemas = {
       ["valorTotal", "Valor total", "number", true],
       ["parcelas", "Quantidade de parcelas", "number", true],
       ["primeiraFatura", "Primeira fatura", "month", true],
+      ["parcelaAtualCadastro", "Parcela atual nesta fatura", "number", false],
       ["recorrenciaCartao", "Repeticao", "select", true, ["pontual", "recorrente"]],
       ["observacoes", "Observacoes", "textarea", false],
     ],
@@ -355,7 +356,7 @@ function getCardNames() {
 }
 
 function purchaseInstallmentForMonth(item, targetMonth = activeMonth) {
-  const firstMonth = cardPurchaseFirstMonth(item);
+  const firstMonth = cardPurchaseEffectiveFirstMonth(item);
   const installments = Math.max(Number.parseInt(item.parcelas, 10) || 1, 1);
   if (!firstMonth) return null;
 
@@ -384,6 +385,12 @@ function cardPurchaseFirstMonth(item) {
   return String(item.primeiraFatura || item.month || "").slice(0, 7);
 }
 
+function cardPurchaseEffectiveFirstMonth(item) {
+  const firstMonth = cardPurchaseFirstMonth(item);
+  const registeredInstallment = Math.max(Number.parseInt(item.parcelaAtualCadastro, 10) || 1, 1);
+  return registeredInstallment > 1 ? addMonths(firstMonth, -(registeredInstallment - 1)) : firstMonth;
+}
+
 function recurringPurchaseKey(item) {
   return [item.cartao, normalizeText(item.descricao), parseMoney(item.valorTotal).toFixed(2)].join("|");
 }
@@ -400,7 +407,7 @@ function cardPurchasesForMonth(card, targetMonth = activeMonth) {
   const cardRows = state.compras.filter((item) => item.cartao === card);
   const latestRecurringMonthByKey = cardRows.reduce((acc, item) => {
     if (!isRecurringCardPurchase(item)) return acc;
-    const firstMonth = cardPurchaseFirstMonth(item);
+    const firstMonth = cardPurchaseEffectiveFirstMonth(item);
     if (!firstMonth || monthDiff(firstMonth, targetMonth) < 0) return acc;
     const key = recurringPurchaseKey(item);
     if (!acc[key] || monthDiff(acc[key], firstMonth) > 0) acc[key] = firstMonth;
@@ -410,7 +417,7 @@ function cardPurchasesForMonth(card, targetMonth = activeMonth) {
   return cardRows
     .filter((item) => {
       if (!isRecurringCardPurchase(item)) return true;
-      return cardPurchaseFirstMonth(item) === latestRecurringMonthByKey[recurringPurchaseKey(item)];
+      return cardPurchaseEffectiveFirstMonth(item) === latestRecurringMonthByKey[recurringPurchaseKey(item)];
     })
     .map((item) => purchaseInstallmentForMonth(item, targetMonth))
     .filter(Boolean);
@@ -852,6 +859,7 @@ async function handleEntrySubmit(event) {
   schema.fields.forEach(([name, , type]) => {
     if (type === "number") data[name] = parseMoney(data[name]);
   });
+  normalizeCardPurchaseFormData(data);
 
   const existing = editingId ? state[schema.collection].find((entry) => entry.id === editingId) : null;
   if (existing) {
@@ -870,6 +878,19 @@ async function handleEntrySubmit(event) {
   render();
   dom.entryDialog.close();
   await persistState("Salvando lancamento na planilha...");
+}
+
+function normalizeCardPurchaseFormData(data) {
+  if (currentFormType !== "compra") return;
+
+  const installments = Math.max(Number.parseInt(data.parcelas, 10) || 1, 1);
+  data.parcelas = installments;
+  data.parcelaAtualCadastro = Math.min(Math.max(Number.parseInt(data.parcelaAtualCadastro, 10) || 1, 1), installments);
+
+  if (data.recorrenciaCartao === "recorrente") {
+    data.parcelas = 1;
+    data.parcelaAtualCadastro = 1;
+  }
 }
 
 function inferMonth(data) {
