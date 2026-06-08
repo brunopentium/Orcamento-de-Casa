@@ -212,24 +212,6 @@ button {
   border-color: rgba(188, 93, 53, 0.35);
 }
 
-.metric.ok {
-  border-color: rgba(39, 120, 77, 0.42);
-  background: #f4fbf6;
-}
-
-.metric.warning {
-  border-color: rgba(185, 130, 24, 0.45);
-  background: #fffaf0;
-}
-
-.metric.ok strong {
-  color: var(--ok);
-}
-
-.metric.warning strong {
-  color: var(--warning);
-}
-
 .panel {
   padding: 18px;
   margin-bottom: 16px;

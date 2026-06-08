@@ -20,7 +20,6 @@ Esta primeira versao do app ainda pode usar `localStorage` enquanto o Apps Scrip
 Chaves usadas pelo app:
 
 - `limiteGastosGerais`: envelope mensal para mercado, gasolina, Uber, farmacia e gastos do dia a dia.
-- `saldoRealConta`: saldo real informado manualmente para comparar com o saldo atual calculado pelo app.
 - `googleSheetId`: ID da planilha usada como banco.
 - `appsScriptUrl`: endpoint do Apps Script publicado.
 

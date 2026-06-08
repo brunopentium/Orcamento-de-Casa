@@ -102,7 +102,6 @@ function writeState(payload) {
     if (payload.config) {
       const configRows = [
         { id: "limiteGastosGerais", chave: "limiteGastosGerais", valor: payload.config.limiteGastosGerais, observacao: "Envelope mensal de gastos gerais" },
-        { id: "saldoRealConta", chave: "saldoRealConta", valor: payload.config.saldoRealConta || 0, observacao: "Saldo real informado para conciliacao com banco" },
         { id: "googleSheetId", chave: "googleSheetId", valor: payload.config.googleSheetId || SPREADSHEET_ID, observacao: "ID da planilha banco" },
         { id: "appsScriptUrl", chave: "appsScriptUrl", valor: payload.config.appsScriptUrl || "", observacao: "URL do endpoint Apps Script" },
       ];

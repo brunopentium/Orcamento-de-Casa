@@ -85,7 +85,6 @@ writeTable(
   ["chave", "valor", "observacao", "id"],
   [
     ["limiteGastosGerais", 5500, "Envelope mensal para mercado, gasolina, Uber, farmacia e gastos do dia a dia", "limiteGastosGerais"],
-    ["saldoRealConta", 0, "Saldo real informado para conciliacao com banco", "saldoRealConta"],
     ["mesAtual", month, "Mes ativo no app", "mesAtual"],
     ["versaoSchema", "1", "Versao inicial do banco", "versaoSchema"],
   ],

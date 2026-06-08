@@ -106,7 +106,6 @@ const formSchemas = {
 const defaultState = {
   config: {
     limiteGastosGerais: 5500,
-    saldoRealConta: 0,
     googleSheetId: "1qcV1LaaIL-ZBQ3DmImjAEmBZk5Dh_sWD1GX8JT9Obwk",
     appsScriptUrl: "https://script.google.com/macros/s/AKfycbyzaPJQykxUagZVyqMyKorcCkgz3_lh8J-yJmnj_7-ZcoWwnOrXbcyIA1_f4bVWVlhxcQ/exec",
   },
@@ -556,8 +555,6 @@ function renderDashboard() {
   const limite = parseMoney(state.config.limiteGastosGerais);
   const despesasAtuais = despesasPagas + cartoesPagos + gastosUsados;
   const saldoAtualApp = receitasRecebidas - despesasAtuais;
-  const saldoRealConta = parseMoney(state.config.saldoRealConta);
-  const diferencaConta = saldoRealConta - saldoAtualApp;
 
   setText("metricReceitasPrevistas", money(receitasPrevistas));
   setText("metricReceitasRecebidas", `Recebido: ${money(receitasRecebidas)}`);
@@ -571,14 +568,6 @@ function renderDashboard() {
   setText("metricDespesasAtuais", money(despesasAtuais));
   setText("metricDespesasAtuaisDetalhe", `Despesas: ${money(despesasPagas)} | Cartoes: ${money(cartoesPagos)} | Gastos: ${money(gastosUsados)}`);
   setText("metricSaldoAtualApp", money(saldoAtualApp));
-  setText("metricSaldoContaReal", `Conta informada: ${money(saldoRealConta)}`);
-  setText("metricDiferencaConta", money(diferencaConta));
-
-  const diffCard = document.querySelector("#metricDiferencaCard");
-  if (diffCard) {
-    diffCard.classList.toggle("ok", Math.abs(diferencaConta) < 0.01);
-    diffCard.classList.toggle("warning", Math.abs(diferencaConta) >= 0.01);
-  }
 
   const percent = limite > 0 ? Math.min((gastosUsados / limite) * 100, 100) : 0;
   const fill = document.querySelector("#gastosProgress");
@@ -706,7 +695,6 @@ function renderGastos() {
 
 function renderConfig() {
   dom.configForm.limiteGastosGerais.value = state.config.limiteGastosGerais;
-  dom.configForm.saldoRealConta.value = state.config.saldoRealConta || 0;
   dom.configForm.googleSheetId.value = state.config.googleSheetId;
   dom.configForm.appsScriptUrl.value = state.config.appsScriptUrl;
 }
@@ -939,7 +927,6 @@ async function handleConfigSubmit(event) {
   event.preventDefault();
   state.config = {
     limiteGastosGerais: parseMoney(dom.configForm.limiteGastosGerais.value),
-    saldoRealConta: parseMoney(dom.configForm.saldoRealConta.value),
     googleSheetId: dom.configForm.googleSheetId.value.trim(),
     appsScriptUrl: dom.configForm.appsScriptUrl.value.trim(),
   };
@@ -1001,29 +988,9 @@ class GoogleSheetsGateway {
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action: "sync", payload: sanitizeStateForSheets(payload) }),
       });
-      const result = await response.json();
-      if (result.ok) {
-        await this.upsertConfig("saldoRealConta", payload.config.saldoRealConta || 0, "Saldo real informado para conciliacao com banco");
-      }
-      return result;
+      return response.json();
     } catch (error) {
       return { ok: false, error: error.message };
-    }
-  }
-
-  async upsertConfig(chave, valor, observacao) {
-    try {
-      await fetch(this.config.appsScriptUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
-          action: "upsert",
-          table: "configuracoes",
-          row: { id: chave, chave, valor, observacao },
-        }),
-      });
-    } catch (error) {
-      console.warn("Nao foi possivel reforcar configuracao remota.", error);
     }
   }
 }
