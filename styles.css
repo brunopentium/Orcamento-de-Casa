@@ -258,6 +258,10 @@ button {
   align-self: start;
 }
 
+.full-span {
+  grid-column: 1 / -1;
+}
+
 label {
   display: grid;
   gap: 7px;
