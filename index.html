@@ -42,43 +42,73 @@
       </header>
 
       <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
-        <div class="summary-grid dashboard-kpis">
-          <article class="metric">
-            <span>Receitas previstas</span>
-            <strong id="metricReceitasPrevistas">R$ 0,00</strong>
-            <small id="metricReceitasRecebidas">Recebido: R$ 0,00</small>
+        <section class="dashboard-overview">
+          <article class="overview-group planned">
+            <div class="overview-heading">
+              <span>Previsto</span>
+              <strong id="metricSaldoPrevisto">R$ 0,00</strong>
+              <small>Saldo planejado</small>
+            </div>
+            <div class="mini-metrics">
+              <div class="mini-metric">
+                <span>Receitas</span>
+                <strong id="metricReceitasPrevistas">R$ 0,00</strong>
+                <small id="metricReceitasRecebidas">Recebido: R$ 0,00</small>
+              </div>
+              <div class="mini-metric">
+                <span>Despesas</span>
+                <strong id="metricDespesasPrevistas">R$ 0,00</strong>
+                <small id="metricDespesasPagas">Pago: R$ 0,00</small>
+              </div>
+            </div>
           </article>
-          <article class="metric">
-            <span>Despesas previstas</span>
-            <strong id="metricDespesasPrevistas">R$ 0,00</strong>
-            <small id="metricDespesasPagas">Pago: R$ 0,00</small>
+
+          <article class="overview-group current">
+            <div class="overview-heading">
+              <span>Atual</span>
+              <strong id="metricSaldoAtualApp">R$ 0,00</strong>
+              <small id="metricSaldoReal">Saldo atual no app</small>
+            </div>
+            <div class="mini-metrics">
+              <div class="mini-metric">
+                <span>Recebidas</span>
+                <strong id="metricReceitasAtuais">R$ 0,00</strong>
+                <small>Entradas confirmadas</small>
+              </div>
+              <div class="mini-metric">
+                <span>Pagas</span>
+                <strong id="metricDespesasAtuais">R$ 0,00</strong>
+                <small id="metricDespesasAtuaisDetalhe">Pagas: R$ 0,00</small>
+              </div>
+            </div>
           </article>
-          <article class="metric">
-            <span>Cartoes previstos</span>
-            <strong id="metricCartoesPrevistos">R$ 0,00</strong>
-            <small id="metricCartoesPagos">Pago: R$ 0,00</small>
+
+          <article class="overview-group cards">
+            <div class="overview-heading">
+              <span>Cartoes</span>
+              <strong id="metricCartoesPrevistos">R$ 0,00</strong>
+              <small id="metricCartoesPagos">Pago: R$ 0,00</small>
+            </div>
+            <p class="overview-note">Total das faturas previstas no mes.</p>
           </article>
-          <article class="metric accent">
-            <span>Saldo previsto</span>
-            <strong id="metricSaldoPrevisto">R$ 0,00</strong>
-            <small id="metricSaldoReal">Saldo atual: R$ 0,00</small>
+
+          <article class="overview-group spending">
+            <div class="overview-heading">
+              <span>Gastos gerais</span>
+              <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
+              <small>Envelope mensal</small>
+            </div>
+            <div class="thermometer">
+              <div class="progress-track">
+                <div class="progress-fill" id="gastosProgress"></div>
+              </div>
+              <div class="progress-labels">
+                <span id="gastosUsado">Usado: R$ 0,00</span>
+                <span id="gastosLimite">Limite: R$ 5.500,00</span>
+              </div>
+            </div>
           </article>
-          <article class="metric">
-            <span>Receitas recebidas</span>
-            <strong id="metricReceitasAtuais">R$ 0,00</strong>
-            <small>Entradas confirmadas no mes</small>
-          </article>
-          <article class="metric">
-            <span>Despesas pagas</span>
-            <strong id="metricDespesasAtuais">R$ 0,00</strong>
-            <small id="metricDespesasAtuaisDetalhe">Pagas e lancadas: R$ 0,00</small>
-          </article>
-          <article class="metric accent">
-            <span>Saldo atual no app</span>
-            <strong id="metricSaldoAtualApp">R$ 0,00</strong>
-            <small>Recebido menos despesas pagas</small>
-          </article>
-        </div>
+        </section>
 
         <section class="dashboard-visual-grid">
           <article class="panel">
@@ -115,16 +145,8 @@
             <div class="panel-heading">
               <div>
                 <h3>Envelope de gastos gerais</h3>
-                <p>Controle do consumo diario dentro do valor separado no mes.</p>
+                <p>Distribuicao dos gastos lancados dentro do envelope.</p>
               </div>
-              <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
-            </div>
-            <div class="progress-track">
-              <div class="progress-fill" id="gastosProgress"></div>
-            </div>
-            <div class="progress-labels">
-              <span id="gastosUsado">Usado: R$ 0,00</span>
-              <span id="gastosLimite">Limite: R$ 5.500,00</span>
             </div>
             <div class="chart-layout compact-chart" id="generalSpendingChart"></div>
           </article>
@@ -441,6 +463,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260609-categorias-descricao1"></script>
+  <script src="app.js?v=20260609-dashboard-topo1"></script>
 </body>
 </html>
