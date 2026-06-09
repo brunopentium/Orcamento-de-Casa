@@ -9,6 +9,7 @@ const TABLES = {
   faturas: "faturas_cartao",
   compras: "compras_cartao",
   gastos: "gastos_gerais",
+  investimentos: "investimentos",
   categorias: "categorias",
 };
 
@@ -68,6 +69,7 @@ function readAllTables() {
     faturas: readTable("faturas"),
     compras: readTable("compras"),
     gastos: readTable("gastos"),
+    investimentos: readTable("investimentos"),
     categorias: readTable("categorias"),
     meses: readTable("meses"),
   };
@@ -114,6 +116,7 @@ function writeState(payload) {
     replaceRows("faturas", payload.faturas || []);
     replaceRows("compras", payload.compras || []);
     replaceRows("gastos", payload.gastos || []);
+    replaceRows("investimentos", payload.investimentos || []);
   } finally {
     lock.releaseLock();
   }

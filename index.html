@@ -22,6 +22,7 @@
         <button class="nav-item" data-view="despesas">Despesas gerais</button>
         <button class="nav-item" data-view="cartoes">Cartoes</button>
         <button class="nav-item" data-view="gastos">Gastos gerais</button>
+        <button class="nav-item" data-view="investimentos">Investimentos</button>
         <button class="nav-item" data-view="config">Configuracoes</button>
       </nav>
     </aside>
@@ -290,6 +291,54 @@
         </div>
       </section>
 
+      <section class="view" id="investimentosView">
+        <div class="summary-grid compact-summary">
+          <article class="metric accent">
+            <span>Saldo poupado</span>
+            <strong id="investimentoSaldo">R$ 0,00</strong>
+            <small>Total acumulado em investimentos</small>
+          </article>
+          <article class="metric">
+            <span>Entradas no mes</span>
+            <strong id="investimentoEntradas">R$ 0,00</strong>
+            <small>Aportes e devolucoes</small>
+          </article>
+          <article class="metric">
+            <span>Saidas no mes</span>
+            <strong id="investimentoSaidas">R$ 0,00</strong>
+            <small>Retiradas temporarias</small>
+          </article>
+          <article class="metric">
+            <span>Movimento do mes</span>
+            <strong id="investimentoMovimentoMes">R$ 0,00</strong>
+            <small>Entradas menos saidas</small>
+          </article>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h3>Movimentacoes</h3>
+            <button class="primary-button" data-open-form="investimento">Adicionar movimento</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descricao</th>
+                  <th>Tipo</th>
+                  <th>Valor</th>
+                  <th>Conta</th>
+                  <th>Origem/destino</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="investimentosTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="view" id="configView">
         <div class="section-grid">
           <form class="panel" id="configForm">
@@ -316,7 +365,7 @@
               <h3>Estrutura Google Sheets</h3>
             </div>
             <div class="sheet-schema">
-              <p><strong>Abas previstas:</strong> configuracoes, meses, receitas, despesas, cartoes, faturas_cartao, compras_cartao, gastos_gerais, categorias.</p>
+              <p><strong>Abas previstas:</strong> configuracoes, meses, receitas, despesas, cartoes, faturas_cartao, compras_cartao, gastos_gerais, investimentos, categorias.</p>
               <p>A planilha Google e o banco principal. O navegador mantem uma copia local para continuar mostrando os dados se a conexao falhar.</p>
             </div>
           </article>
@@ -338,6 +387,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260609-gastos-envelope1"></script>
+  <script src="app.js?v=20260609-investimentos1"></script>
 </body>
 </html>

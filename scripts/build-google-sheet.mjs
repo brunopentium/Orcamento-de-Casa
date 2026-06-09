@@ -17,6 +17,7 @@ const sheets = {
   faturas: workbook.worksheets.add("faturas_cartao"),
   compras: workbook.worksheets.add("compras_cartao"),
   gastos: workbook.worksheets.add("gastos_gerais"),
+  investimentos: workbook.worksheets.add("investimentos"),
   categorias: workbook.worksheets.add("categorias"),
 };
 
@@ -163,6 +164,16 @@ writeTable(
 );
 applyMoney(sheets.gastos, ["F"]);
 applyDate(sheets.gastos, ["C", "I", "J"]);
+
+writeTable(
+  sheets.investimentos,
+  ["id", "month", "data", "descricao", "tipo", "valor", "conta", "origemDestino", "observacoes", "createdAt", "updatedAt"],
+  [],
+  "tbl_investimentos",
+  [110, 90, 120, 240, 130, 130, 170, 180, 320, 120, 120],
+);
+applyMoney(sheets.investimentos, ["F"]);
+applyDate(sheets.investimentos, ["C", "J", "K"]);
 
 writeTable(
   sheets.categorias,

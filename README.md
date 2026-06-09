@@ -7,7 +7,7 @@ Webapp inicial para planejar e acompanhar o orcamento mensal da casa.
 - App estatico sem dependencias externas.
 - Banco inicial criado no Google Sheets.
 - Endpoint Google Apps Script configurado para sincronizacao com a planilha.
-- Telas iniciais: Dashboard, Receitas, Despesas gerais, Cartoes, Gastos gerais e Configuracoes.
+- Telas iniciais: Dashboard, Receitas, Despesas gerais, Cartoes, Gastos gerais, Investimentos e Configuracoes.
 
 ## Banco Google Sheets
 
@@ -35,6 +35,7 @@ cartoes
 faturas_cartao
 compras_cartao
 gastos_gerais
+investimentos
 categorias
 ```
 

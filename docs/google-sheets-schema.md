@@ -131,6 +131,24 @@ Use esta aba para os lancamentos diarios dentro do envelope mensal, como mercado
 | createdAt |
 | updatedAt |
 
+## investimentos
+
+Use esta aba para controlar o saldo poupado/investido. Entradas, devolucoes e saldo inicial aumentam o saldo; saidas reduzem o saldo, como emprestimos temporarios para recompor a conta dos gastos gerais.
+
+| campo |
+| --- |
+| id |
+| month |
+| data |
+| descricao |
+| tipo |
+| valor |
+| conta |
+| origemDestino |
+| observacoes |
+| createdAt |
+| updatedAt |
+
 ## categorias
 
 | campo | exemplo |

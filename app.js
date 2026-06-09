@@ -101,6 +101,19 @@ const formSchemas = {
       ["observacoes", "Observacoes", "textarea", false],
     ],
   },
+  investimento: {
+    title: "Movimentacao de investimento",
+    collection: "investimentos",
+    fields: [
+      ["data", "Data", "date", true],
+      ["descricao", "Descricao", "text", true],
+      ["tipo", "Tipo", "select", true, ["saldo inicial", "entrada", "saida", "devolucao"]],
+      ["valor", "Valor", "number", true],
+      ["conta", "Conta/aplicacao", "text", false],
+      ["origemDestino", "Origem ou destino", "select", true, ["Recebimento do mes", "Gastos gerais", "Conta corrente", "Outro"]],
+      ["observacoes", "Observacoes", "textarea", false],
+    ],
+  },
 };
 
 const defaultState = {
@@ -140,9 +153,10 @@ const defaultState = {
   faturas: [],
   compras: [],
   gastos: [],
+  investimentos: [],
 };
 
-const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos"];
+const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos", "investimentos"];
 const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "fechamento", "dataPagamento", "primeiraFatura"];
 
 let state = loadState();
@@ -234,6 +248,10 @@ function mergeRemoteState(remoteState) {
       merged[collection] = remoteRows;
     }
   });
+
+  if (!Array.isArray(remoteState?.investimentos)) {
+    merged.investimentos = Array.isArray(state?.investimentos) ? state.investimentos.map(normalizeRow) : [];
+  }
 
   return merged;
 }
@@ -368,6 +386,23 @@ function effectiveExpenseRow(item, sourceState = state) {
 
 function effectiveExpenseRows(items, sourceState = state) {
   return items.map((item) => effectiveExpenseRow(item, sourceState));
+}
+
+function investmentSignedValue(item) {
+  const value = parseMoney(item.valor);
+  return item.tipo === "saida" ? -value : value;
+}
+
+function investmentBalance(items = state.investimentos) {
+  return items.reduce((total, item) => total + investmentSignedValue(item), 0);
+}
+
+function investmentTotalsForMonth() {
+  const items = monthItems("investimentos");
+  return {
+    entradas: items.filter((item) => item.tipo === "entrada" || item.tipo === "devolucao").reduce((total, item) => total + parseMoney(item.valor), 0),
+    saidas: items.filter((item) => item.tipo === "saida").reduce((total, item) => total + parseMoney(item.valor), 0),
+  };
 }
 
 function parseRecebimentos(receita) {
@@ -614,6 +649,7 @@ function switchView(view) {
     despesas: "Despesas gerais",
     cartoes: "Cartoes",
     gastos: "Gastos gerais",
+    investimentos: "Investimentos",
     config: "Configuracoes",
   };
   dom.pageTitle.textContent = labels[view];
@@ -639,6 +675,7 @@ function render() {
   renderDespesas();
   renderCartoes();
   renderGastos();
+  renderInvestimentos();
   renderConfig();
 }
 
@@ -807,6 +844,26 @@ function renderGastos() {
     money(item.valor),
     item.formaPagamento,
     actions("gasto", item.id, ""),
+  ]);
+}
+
+function renderInvestimentos() {
+  const monthInvestments = monthItems("investimentos").sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+  const monthTotals = investmentTotalsForMonth();
+
+  setText("investimentoSaldo", money(investmentBalance()));
+  setText("investimentoEntradas", money(monthTotals.entradas));
+  setText("investimentoSaidas", money(monthTotals.saidas));
+  setText("investimentoMovimentoMes", money(monthTotals.entradas - monthTotals.saidas));
+
+  renderRows("investimentosTable", monthInvestments, (item) => [
+    item.data,
+    item.descricao,
+    investmentTypeLabel(item.tipo),
+    money(parseMoney(item.valor)),
+    item.conta || "",
+    item.origemDestino || "",
+    actions("investimento", item.id, ""),
   ]);
 }
 
@@ -1196,6 +1253,16 @@ function recurrenceLabel(item) {
   if (item.recorrencia === "sempre") return "Sempre";
   if (item.recorrencia === "meses") return `${item.repetirPorMeses || 0} meses`;
   return "Nao";
+}
+
+function investmentTypeLabel(type) {
+  const labels = {
+    "saldo inicial": "Saldo inicial",
+    entrada: "Entrada",
+    saida: "Saida",
+    devolucao: "Devolucao",
+  };
+  return labels[type] || type || "";
 }
 
 function setText(id, value) {
