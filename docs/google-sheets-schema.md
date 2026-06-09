@@ -87,6 +87,7 @@ Use esta aba para as despesas gerais do mes, incluindo a linha do envelope `Gast
 | id |
 | month |
 | cartao |
+| fechamento |
 | vencimento |
 | valorPrevisto |
 | valorRealizado |

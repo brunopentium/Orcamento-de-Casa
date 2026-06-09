@@ -55,6 +55,7 @@ const formSchemas = {
     collection: "faturas",
     fields: [
       ["cartao", "Cartao", "text", true],
+      ["fechamento", "Fechamento", "date", false],
       ["vencimento", "Vencimento", "date", true],
       ["valorPrevisto", "Valor previsto", "number", true],
       ["valorRealizado", "Valor pago", "number", false],
@@ -68,8 +69,8 @@ const formSchemas = {
     fields: [
       ["nome", "Nome do cartao", "text", true],
       ["limite", "Limite", "number", false],
-      ["vencimentoDia", "Dia de vencimento", "number", false],
-      ["fechamentoDia", "Dia de fechamento", "number", false],
+      ["vencimentoDia", "Dia padrao de vencimento", "number", false],
+      ["fechamentoDia", "Dia padrao de fechamento", "number", false],
       ["ativo", "Ativo", "select", true, ["sim", "nao"]],
       ["observacoes", "Observacoes", "textarea", false],
     ],
@@ -143,7 +144,7 @@ const defaultState = {
 };
 
 const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos"];
-const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "dataPagamento", "primeiraFatura"];
+const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "fechamento", "dataPagamento", "primeiraFatura"];
 
 let state = loadState();
 let activeMonth = monthKey(new Date());
@@ -426,11 +427,25 @@ function invoiceForCardMonth(card, targetMonth = activeMonth) {
   return state.faturas.find((item) => item.cartao === card && String(item.month || item.vencimento || "").slice(0, 7) === targetMonth);
 }
 
+function cardMonthlyDay(cardRow, fallbackDay, ...fields) {
+  const value = fields.map((field) => cardRow?.[field]).find((fieldValue) => fieldValue !== undefined && fieldValue !== "");
+  return Math.min(Math.max(Number.parseInt(value, 10) || fallbackDay, 1), 31);
+}
+
+function dateForCardDay(card, targetMonth, fallbackDay, ...fields) {
+  const cardRow = (state.cartoes || []).find((item) => cardName(item) === card);
+  const day = cardRow ? cardMonthlyDay(cardRow, fallbackDay, ...fields) : fallbackDay;
+  return `${targetMonth}-${String(day).padStart(2, "0")}`;
+}
+
+function cardClosingDate(card, invoice, targetMonth = activeMonth) {
+  if (invoice?.fechamento) return invoice.fechamento;
+  return dateForCardDay(card, targetMonth, 21, "fechamentoDia", "diaFechamento");
+}
+
 function cardDueDate(card, invoice, targetMonth = activeMonth) {
   if (invoice?.vencimento) return invoice.vencimento;
-  const cardRow = (state.cartoes || []).find((item) => cardName(item) === card);
-  const day = Math.min(Math.max(Number.parseInt(cardRow?.vencimentoDia, 10) || 28, 1), 31);
-  return `${targetMonth}-${String(day).padStart(2, "0")}`;
+  return dateForCardDay(card, targetMonth, 28, "vencimentoDia", "diaVencimento");
 }
 
 function calculatedCardInvoices(targetMonth = activeMonth) {
@@ -443,6 +458,7 @@ function calculatedCardInvoices(targetMonth = activeMonth) {
     return {
       id: invoice?.id || `calculated-${card}-${targetMonth}`,
       cartao: card,
+      fechamento: cardClosingDate(card, invoice, targetMonth),
       vencimento: cardDueDate(card, invoice, targetMonth),
       valorPrevisto: total,
       valorRealizado: paid,
@@ -459,6 +475,7 @@ function futureInvoicesForCard(card, months = 6) {
     const targetMonth = addMonths(activeMonth, index + 1);
     return calculatedCardInvoices(targetMonth).find((item) => item.cartao === card) || {
       cartao: card,
+      fechamento: cardClosingDate(card, null, targetMonth),
       vencimento: cardDueDate(card, null, targetMonth),
       valorPrevisto: 0,
       valorRealizado: 0,
@@ -550,6 +567,8 @@ function renderDashboard() {
   const despesasPagas = sum(despesas, "valorRealizado");
   const cartoesPrevistos = sum(faturas, "valorPrevisto");
   const cartoesPagos = sum(faturas, "valorRealizado");
+  const despesasPrevistasComCartoes = despesasPrevistas + cartoesPrevistos;
+  const despesasPagasComCartoes = despesasPagas + cartoesPagos;
   const gastosUsados = sum(gastos, "valor");
   const limite = parseMoney(state.config.limiteGastosGerais);
   const despesasAtuais = despesasPagas + cartoesPagos + gastosUsados;
@@ -557,8 +576,8 @@ function renderDashboard() {
 
   setText("metricReceitasPrevistas", money(receitasPrevistas));
   setText("metricReceitasRecebidas", `Recebido: ${money(receitasRecebidas)}`);
-  setText("metricDespesasPrevistas", money(despesasPrevistas));
-  setText("metricDespesasPagas", `Pago: ${money(despesasPagas)}`);
+  setText("metricDespesasPrevistas", money(despesasPrevistasComCartoes));
+  setText("metricDespesasPagas", `Pago: ${money(despesasPagasComCartoes)}`);
   setText("metricCartoesPrevistos", money(cartoesPrevistos));
   setText("metricCartoesPagos", `Pago: ${money(cartoesPagos)}`);
   setText("metricSaldoPrevisto", money(receitasPrevistas - despesasPrevistas - cartoesPrevistos));
@@ -636,15 +655,25 @@ function renderReceitas() {
 }
 
 function renderDespesas() {
-  renderRows("despesasTable", monthItems("despesas"), (item) => [
+  const despesas = monthItems("despesas").map((item) => ({ ...item, rowKind: "despesa" }));
+  const cardExpenses = calculatedCardInvoices()
+    .filter((item) => item.valorPrevisto || item.valorRealizado || item.sourceInvoiceId)
+    .map((item) => ({
+      ...item,
+      rowKind: "fatura-cartao",
+      descricao: `Fatura - ${item.cartao}`,
+      categoria: "Cartao de credito",
+    }));
+
+  renderRows("despesasTable", [...despesas, ...cardExpenses], (item) => [
     item.descricao,
     item.categoria,
     money(item.valorPrevisto),
     money(item.valorRealizado),
     item.vencimento,
     statusBadge(item.status),
-    recurrenceLabel(item),
-    actions("despesa", item.id, item.status !== "pago" ? "Marcar paga" : ""),
+    item.rowKind === "fatura-cartao" ? "Fatura mensal" : recurrenceLabel(item),
+    item.rowKind === "fatura-cartao" ? cardExpenseActions(item) : actions("despesa", item.id, item.status !== "pago" ? "Marcar paga" : ""),
   ]);
 }
 
@@ -656,6 +685,7 @@ function renderCartoes() {
 
   renderRows("faturasTable", invoices, (item) => [
     `<button class="link-button ${item.cartao === activeCardName ? "active" : ""}" data-action="select-card" data-card="${escapeHtml(item.cartao)}">${escapeHtml(item.cartao)}</button>`,
+    item.fechamento,
     item.vencimento,
     money(item.valorPrevisto),
     money(item.valorRealizado),
@@ -675,6 +705,7 @@ function renderCartoes() {
 
   renderRows("faturasFuturasTable", futureInvoicesForCard(activeCardName), (item) => [
     String(item.vencimento || "").slice(0, 7),
+    item.fechamento,
     item.vencimento,
     money(item.valorPrevisto),
     `${item.purchaseCount || 0}`,
@@ -728,8 +759,18 @@ function cardInvoiceActions(item) {
   return `
     <div class="row-actions">
       ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
+      <button class="small-button" data-action="adjust-card-invoice" data-card="${escapeHtml(item.cartao)}">Ajustar fatura</button>
       <button class="small-button" data-action="edit-card" data-card="${escapeHtml(item.cartao)}">Editar cartao</button>
       <button class="danger-button" data-action="delete-card" data-card="${escapeHtml(item.cartao)}">Excluir cartao</button>
+    </div>
+  `;
+}
+
+function cardExpenseActions(item) {
+  return `
+    <div class="row-actions">
+      ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
+      <button class="small-button" data-action="adjust-card-invoice" data-card="${escapeHtml(item.cartao)}">Ajustar fatura</button>
     </div>
   `;
 }
@@ -751,6 +792,11 @@ async function handleRowAction(event) {
 
   if (action === "delete-card") {
     await deleteCard(card);
+    return;
+  }
+
+  if (action === "adjust-card-invoice") {
+    openCardInvoiceForm(card);
     return;
   }
 
@@ -799,6 +845,20 @@ async function deleteCard(card) {
   await persistState("Excluindo cartao na planilha...");
 }
 
+function openCardInvoiceForm(card) {
+  const invoice = invoiceForCardMonth(card);
+  const summary = calculatedCardInvoices().find((item) => item.cartao === card);
+  openEntryForm("fatura", invoice?.id || null, {
+    cartao: card,
+    fechamento: summary?.fechamento || cardClosingDate(card, null),
+    vencimento: summary?.vencimento || cardDueDate(card, null),
+    valorPrevisto: summary?.valorPrevisto || 0,
+    valorRealizado: summary?.valorRealizado || 0,
+    status: summary?.status || "previsto",
+    observacoes: "Fatura ajustada manualmente para este mes.",
+  });
+}
+
 async function markCardInvoicePaid(card) {
   const invoiceSummary = calculatedCardInvoices().find((item) => item.cartao === card);
   if (!invoiceSummary) return;
@@ -810,6 +870,7 @@ async function markCardInvoicePaid(card) {
       collection: "faturas",
       month: activeMonth,
       cartao: card,
+      fechamento: invoiceSummary.fechamento,
       vencimento: invoiceSummary.vencimento,
       observacoes: "Fatura criada automaticamente a partir das compras e parcelas do mes.",
       createdAt: new Date().toISOString(),
@@ -819,6 +880,8 @@ async function markCardInvoicePaid(card) {
 
   Object.assign(invoice, {
     month: activeMonth,
+    fechamento: invoiceSummary.fechamento,
+    vencimento: invoiceSummary.vencimento,
     valorPrevisto: invoiceSummary.valorPrevisto,
     valorRealizado: invoiceSummary.valorPrevisto,
     status: "pago",
@@ -829,11 +892,11 @@ async function markCardInvoicePaid(card) {
   await persistState("Atualizando pagamento da fatura na planilha...");
 }
 
-function openEntryForm(type, id = null) {
+function openEntryForm(type, id = null, initialData = null) {
   currentFormType = type;
   editingId = id;
   const schema = formSchemas[type];
-  const item = id ? state[schema.collection].find((entry) => entry.id === id) : null;
+  const item = id ? state[schema.collection].find((entry) => entry.id === id) : initialData;
   dom.dialogTitle.textContent = id ? `Editar ${schema.title.toLowerCase()}` : `Nova ${schema.title.toLowerCase()}`;
   dom.dialogFields.innerHTML = schema.fields.map((field) => renderField(field, item)).join("");
   dom.entryDialog.showModal();
@@ -923,6 +986,7 @@ function normalizeCardPurchaseFormData(data) {
 }
 
 function inferMonth(data) {
+  if (currentFormType === "fatura") return activeMonth;
   return String(data.primeiraFatura || data.data || data.vencimento || data.dataPrevista || activeMonth).slice(0, 7);
 }
 

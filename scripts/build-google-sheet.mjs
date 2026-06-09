@@ -135,13 +135,13 @@ writeTable(
 
 writeTable(
   sheets.faturas,
-  ["id", "month", "cartao", "vencimento", "valorPrevisto", "valorRealizado", "status", "observacoes", "createdAt", "updatedAt"],
+  ["id", "month", "cartao", "vencimento", "valorPrevisto", "valorRealizado", "status", "observacoes", "createdAt", "updatedAt", "fechamento"],
   [],
   "tbl_faturas_cartao",
-  [110, 90, 180, 120, 130, 130, 110, 300, 120, 120],
+  [110, 90, 180, 120, 130, 130, 110, 300, 120, 120, 120],
 );
 applyMoney(sheets.faturas, ["E", "F"]);
-applyDate(sheets.faturas, ["D", "I", "J"]);
+applyDate(sheets.faturas, ["D", "I", "J", "K"]);
 
 writeTable(
   sheets.compras,
