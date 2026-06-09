@@ -43,9 +43,9 @@
 
       <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
         <section class="dashboard-overview">
-          <article class="overview-group planned">
+          <article class="overview-group planned" data-label="Previsto">
             <div class="overview-heading">
-              <span>Previsto</span>
+              <span class="overview-pill">Previsto</span>
               <strong id="metricSaldoPrevisto">R$ 0,00</strong>
               <small>Saldo planejado</small>
             </div>
@@ -63,9 +63,9 @@
             </div>
           </article>
 
-          <article class="overview-group current">
+          <article class="overview-group current" data-label="Atual">
             <div class="overview-heading">
-              <span>Atual</span>
+              <span class="overview-pill">Atual</span>
               <strong id="metricSaldoAtualApp">R$ 0,00</strong>
               <small id="metricSaldoReal">Saldo atual no app</small>
             </div>
@@ -83,18 +83,18 @@
             </div>
           </article>
 
-          <article class="overview-group cards">
+          <article class="overview-group cards" data-label="Cartoes">
             <div class="overview-heading">
-              <span>Cartoes</span>
+              <span class="overview-pill">Cartoes</span>
               <strong id="metricCartoesPrevistos">R$ 0,00</strong>
               <small id="metricCartoesPagos">Pago: R$ 0,00</small>
             </div>
             <p class="overview-note">Total das faturas previstas no mes.</p>
           </article>
 
-          <article class="overview-group spending">
+          <article class="overview-group spending" data-label="Gastos">
             <div class="overview-heading">
-              <span>Gastos gerais</span>
+              <span class="overview-pill">Gastos gerais</span>
               <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
               <small>Envelope mensal</small>
             </div>
@@ -463,6 +463,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260609-dashboard-topo1"></script>
+  <script src="app.js?v=20260609-dashboard-topo2"></script>
 </body>
 </html>
