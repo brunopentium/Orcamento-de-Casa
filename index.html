@@ -42,7 +42,7 @@
       </header>
 
       <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
-        <div class="summary-grid">
+        <div class="summary-grid dashboard-kpis">
           <article class="metric">
             <span>Receitas previstas</span>
             <strong id="metricReceitasPrevistas">R$ 0,00</strong>
@@ -80,21 +80,62 @@
           </article>
         </div>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <div>
-              <h3>Envelope de gastos gerais</h3>
-              <p>Controle do consumo diario dentro do valor separado no mes.</p>
+        <section class="dashboard-visual-grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <h3>Composicao do mes</h3>
+                <p>Despesas gerais, cartoes e consumo do envelope.</p>
+              </div>
             </div>
-            <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
-          </div>
-          <div class="progress-track">
-            <div class="progress-fill" id="gastosProgress"></div>
-          </div>
-          <div class="progress-labels">
-            <span id="gastosUsado">Usado: R$ 0,00</span>
-            <span id="gastosLimite">Limite: R$ 5.500,00</span>
-          </div>
+            <div class="chart-layout" id="monthlyCompositionChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <h3>Envelope de gastos gerais</h3>
+                <p>Controle do consumo diario dentro do valor separado no mes.</p>
+              </div>
+              <strong id="gastosDisponivel">R$ 0,00 disponivel</strong>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="gastosProgress"></div>
+            </div>
+            <div class="progress-labels">
+              <span id="gastosUsado">Usado: R$ 0,00</span>
+              <span id="gastosLimite">Limite: R$ 5.500,00</span>
+            </div>
+            <div class="chart-layout compact-chart" id="generalSpendingChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Despesas gerais por categoria</h3>
+            </div>
+            <div class="chart-layout" id="generalExpensesChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Cartoes por categoria</h3>
+            </div>
+            <div class="chart-layout" id="cardCategoriesChart"></div>
+          </article>
+
+          <article class="panel full-span">
+            <div class="panel-heading">
+              <h3>Evolucao das faturas</h3>
+            </div>
+            <div class="wide-chart" id="cardEvolutionChart"></div>
+          </article>
+
+          <article class="panel full-span">
+            <div class="panel-heading">
+              <h3>Evolucao dos investimentos</h3>
+            </div>
+            <div class="wide-chart" id="investmentEvolutionChart"></div>
+          </article>
         </section>
 
         <section class="dashboard-columns">
@@ -387,6 +428,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260609-investimentos1"></script>
+  <script src="app.js?v=20260609-dashboard-graficos1"></script>
 </body>
 </html>

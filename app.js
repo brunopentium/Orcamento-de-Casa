@@ -18,6 +18,8 @@ const categories = [
   "Outros",
 ];
 
+const chartColors = ["#226a5c", "#bc5d35", "#2f6fb0", "#7c5ab8", "#b98218", "#27784d", "#b92f2f", "#4a7c85", "#8a6f38", "#5a6b54"];
+
 const formSchemas = {
   receita: {
     title: "Receita",
@@ -319,6 +321,15 @@ function money(value) {
   });
 }
 
+function compactMoney(value) {
+  const amount = parseMoney(value);
+  if (Math.abs(amount) >= 1000) {
+    const compact = amount / 1000;
+    return `R$ ${compact.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  }
+  return money(amount);
+}
+
 function parseMoney(value) {
   return Number.parseFloat(value || 0) || 0;
 }
@@ -345,6 +356,151 @@ function monthItems(collection) {
 
 function sum(items, key) {
   return items.reduce((total, item) => total + parseMoney(item[key]), 0);
+}
+
+function groupSum(items, labelGetter, valueGetter) {
+  return items.reduce((acc, item) => {
+    const label = labelGetter(item) || "Sem categoria";
+    acc[label] = (acc[label] || 0) + parseMoney(valueGetter(item));
+    return acc;
+  }, {});
+}
+
+function chartRowsFromGroup(grouped, limit = 8) {
+  return Object.entries(grouped)
+    .map(([label, value]) => ({ label, value: parseMoney(value) }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
+}
+
+function renderEmptyChart(message = "Sem dados para o mes.") {
+  return `<div class="chart-empty">${message}</div>`;
+}
+
+function renderDonutChart(items, options = {}) {
+  const rows = items.filter((item) => parseMoney(item.value) > 0);
+  const total = rows.reduce((acc, item) => acc + item.value, 0);
+  if (!total) return renderEmptyChart(options.empty);
+
+  let offset = 0;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const segments = rows
+    .map((item, index) => {
+      const share = item.value / total;
+      const dash = share * circumference;
+      const segment = `<circle class="donut-segment" cx="60" cy="60" r="${radius}" fill="none" stroke="${chartColors[index % chartColors.length]}" stroke-width="18" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" />`;
+      offset += dash;
+      return segment;
+    })
+    .join("");
+
+  const legend = rows
+    .map((item, index) => {
+      const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+      return `
+        <div class="chart-legend-row">
+          <span class="legend-dot" style="background:${chartColors[index % chartColors.length]}"></span>
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${money(item.value)}</strong>
+          <small>${percent}%</small>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="donut-chart">
+      <svg viewBox="0 0 120 120" role="img" aria-label="${escapeHtml(options.label || "Grafico")}">
+        <circle cx="60" cy="60" r="${radius}" fill="none" stroke="#eef3ef" stroke-width="18"></circle>
+        <g transform="rotate(-90 60 60)">${segments}</g>
+        <text x="60" y="56" text-anchor="middle" class="donut-total-label">${escapeHtml(options.centerLabel || "Total")}</text>
+        <text x="60" y="75" text-anchor="middle" class="donut-total-value">${compactMoney(total)}</text>
+      </svg>
+      <div class="chart-legend">${legend}</div>
+    </div>
+  `;
+}
+
+function renderBarChart(items, options = {}) {
+  const rows = items.filter((item) => parseMoney(item.value) > 0);
+  const max = Math.max(...rows.map((item) => item.value), 0);
+  if (!max) return renderEmptyChart(options.empty);
+
+  return `
+    <div class="bar-chart">
+      ${rows
+        .map(
+          (item, index) => `
+            <div class="bar-row">
+              <span>${escapeHtml(item.label)}</span>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max((item.value / max) * 100, 2)}%; background:${chartColors[index % chartColors.length]}"></div>
+              </div>
+              <strong>${money(item.value)}</strong>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLineChart(items, options = {}) {
+  const rows = items.filter((item) => item.label);
+  if (!rows.length) return renderEmptyChart(options.empty);
+
+  const values = rows.map((item) => parseMoney(item.value));
+  const min = Math.min(0, ...values);
+  const max = Math.max(...values, 0);
+  const span = max - min || 1;
+  const width = 640;
+  const height = 220;
+  const left = 42;
+  const right = 18;
+  const top = 18;
+  const bottom = 34;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const points = rows.map((item, index) => {
+    const x = left + (rows.length === 1 ? plotWidth / 2 : (plotWidth / (rows.length - 1)) * index);
+    const y = top + plotHeight - ((parseMoney(item.value) - min) / span) * plotHeight;
+    return { ...item, x, y };
+  });
+  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${left},${top + plotHeight} ${polyline} ${left + plotWidth},${top + plotHeight}`;
+  const zeroY = top + plotHeight - ((0 - min) / span) * plotHeight;
+
+  return `
+    <div class="line-chart">
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.label || "Evolucao")}">
+        <line x1="${left}" x2="${left + plotWidth}" y1="${zeroY}" y2="${zeroY}" class="axis-line"></line>
+        <polygon points="${area}" class="line-area"></polygon>
+        <polyline points="${polyline}" class="line-path"></polyline>
+        ${points
+          .map(
+            (point) => `
+              <circle cx="${point.x}" cy="${point.y}" r="4" class="line-dot"></circle>
+              <text x="${point.x}" y="${height - 10}" text-anchor="middle" class="axis-label">${escapeHtml(point.label)}</text>
+            `
+          )
+          .join("")}
+      </svg>
+      <div class="chart-legend compact-legend">
+        ${rows
+          .map(
+            (item) => `
+              <div class="chart-legend-row">
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${money(item.value)}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
 }
 
 function isGeneralSpendingExpense(item) {
@@ -720,8 +876,68 @@ function renderDashboard() {
   setText("gastosUsado", `Usado: ${money(gastosUsados)}`);
   setText("gastosLimite", `Limite: ${money(limite)}`);
 
+  renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsados });
   renderUpcoming(despesas, faturas);
   renderCategories(gastos);
+}
+
+function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsados }) {
+  const despesasSemEnvelope = despesas.filter((item) => !isGeneralSpendingExpense(item));
+  const despesasGeraisValor = sum(despesasSemEnvelope, "valorPrevisto");
+
+  setChart("monthlyCompositionChart", renderDonutChart([
+    { label: "Despesas gerais", value: despesasGeraisValor },
+    { label: "Cartoes", value: cartoesPrevistos },
+    { label: "Gastos gerais usados", value: gastosUsados },
+  ], { centerLabel: "Mes", empty: "Ainda nao ha valores previstos neste mes." }));
+
+  setChart("generalSpendingChart", renderDonutChart(chartRowsFromGroup(groupSum(gastos, (item) => item.categoria, (item) => item.valor)), {
+    centerLabel: "Usado",
+    empty: "Ainda nao ha gastos gerais lancados.",
+  }));
+
+  setChart("generalExpensesChart", renderDonutChart(chartRowsFromGroup(groupSum(despesasSemEnvelope, (item) => item.categoria, (item) => item.valorPrevisto)), {
+    centerLabel: "Despesas",
+    empty: "Ainda nao ha despesas gerais por categoria.",
+  }));
+
+  const cardPurchases = getCardNames().flatMap((card) => cardPurchasesForMonth(card).map((item) => ({ ...item, cartao: card })));
+  setChart("cardCategoriesChart", renderDonutChart(chartRowsFromGroup(groupSum(cardPurchases, (item) => item.categoria, (item) => item.valorParcela)), {
+    centerLabel: "Cartoes",
+    empty: "Ainda nao ha compras de cartao neste mes.",
+  }));
+
+  const cardEvolution = Array.from({ length: 6 }, (_, index) => {
+    const targetMonth = addMonths(activeMonth, index);
+    const total = sum(calculatedCardInvoices(targetMonth), "valorPrevisto");
+    return { label: monthShortLabel(targetMonth), value: total };
+  });
+  setChart("cardEvolutionChart", renderBarChart(cardEvolution, { empty: "Nao ha faturas projetadas." }));
+
+  const investmentEvolution = Array.from({ length: 6 }, (_, index) => {
+    const targetMonth = addMonths(activeMonth, index - 5);
+    return { label: monthShortLabel(targetMonth), value: investmentBalanceUntil(targetMonth) };
+  });
+  setChart("investmentEvolutionChart", renderLineChart(investmentEvolution, { empty: "Nao ha movimentacoes de investimento." }));
+}
+
+function setChart(id, html) {
+  const element = document.querySelector(`#${id}`);
+  if (element) element.innerHTML = html;
+}
+
+function monthShortLabel(month) {
+  const [year, monthNumber] = String(month).slice(0, 7).split("-").map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+}
+
+function investmentBalanceUntil(targetMonth) {
+  return (state.investimentos || [])
+    .filter((item) => {
+      const itemMonth = String(item.month || item.data || "").slice(0, 7);
+      return itemMonth && monthDiff(itemMonth, targetMonth) >= 0;
+    })
+    .reduce((total, item) => total + investmentSignedValue(item), 0);
 }
 
 function renderUpcoming(despesas, faturas) {
