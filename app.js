@@ -25,7 +25,6 @@ const formSchemas = {
     fields: [
       ["descricao", "Descricao", "text", true],
       ["valorPrevisto", "Valor previsto", "number", true],
-      ["valorRealizado", "Valor recebido", "number", false],
       ["dataPrevista", "Data prevista", "date", true],
       ["dataRealizada", "Data recebida", "date", false],
       ["status", "Status", "select", true, ["previsto", "recebido", "parcial", "atrasado"]],
@@ -209,7 +208,13 @@ function normalizeRow(row) {
 }
 
 function sanitizeStateForSheets(nextState) {
-  return mergeState(nextState);
+  const sanitized = mergeState(nextState);
+  sanitized.receitas = sanitized.receitas.map((receita) => {
+    const nextReceita = { ...receita };
+    updateReceitaRecebida(nextReceita);
+    return nextReceita;
+  });
+  return sanitized;
 }
 
 function mergeRemoteState(remoteState) {
@@ -321,6 +326,46 @@ function monthItems(collection) {
 
 function sum(items, key) {
   return items.reduce((total, item) => total + parseMoney(item[key]), 0);
+}
+
+function parseRecebimentos(receita) {
+  if (!receita?.recebimentos) return [];
+  if (Array.isArray(receita.recebimentos)) return receita.recebimentos;
+  try {
+    const parsed = JSON.parse(receita.recebimentos);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeRecebimentos(recebimentos) {
+  return JSON.stringify(
+    recebimentos.map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      data: item.data || new Date().toISOString().slice(0, 10),
+      valor: parseMoney(item.valor),
+      observacoes: item.observacoes || "",
+    }))
+  );
+}
+
+function receitaValorRecebido(receita) {
+  const recebimentos = parseRecebimentos(receita);
+  if (!recebimentos.length) return parseMoney(receita.valorRealizado);
+  return recebimentos.reduce((total, item) => total + parseMoney(item.valor), 0);
+}
+
+function updateReceitaRecebida(receita) {
+  const recebido = receitaValorRecebido(receita);
+  const previsto = parseMoney(receita.valorPrevisto);
+  receita.valorRealizado = recebido;
+  if (recebido <= 0) receita.status = "previsto";
+  else if (previsto > 0 && recebido >= previsto) receita.status = "recebido";
+  else receita.status = "parcial";
+  const recebimentos = parseRecebimentos(receita);
+  receita.dataRealizada = recebimentos.length ? recebimentos[recebimentos.length - 1].data : "";
+  receita.updatedAt = new Date().toISOString();
 }
 
 function addMonths(month, amount) {
@@ -562,7 +607,7 @@ function renderDashboard() {
   const gastos = monthItems("gastos");
 
   const receitasPrevistas = sum(receitas, "valorPrevisto");
-  const receitasRecebidas = sum(receitas, "valorRealizado");
+  const receitasRecebidas = receitas.reduce((total, item) => total + receitaValorRecebido(item), 0);
   const despesasPrevistas = sum(despesas, "valorPrevisto");
   const despesasPagas = sum(despesas, "valorRealizado");
   const cartoesPrevistos = sum(faturas, "valorPrevisto");
@@ -646,11 +691,11 @@ function renderReceitas() {
   renderRows("receitasTable", monthItems("receitas"), (item) => [
     item.descricao,
     money(item.valorPrevisto),
-    money(item.valorRealizado),
+    `${money(receitaValorRecebido(item))}<br><span>${parseRecebimentos(item).length} recebimento(s)</span>`,
     item.dataPrevista,
     statusBadge(item.status),
     recurrenceLabel(item),
-    actions("receita", item.id, item.status !== "recebido" ? "Marcar recebida" : ""),
+    receitaActions(item),
   ]);
 }
 
@@ -755,6 +800,17 @@ function actions(type, id, completeLabel) {
   `;
 }
 
+function receitaActions(item) {
+  return `
+    <div class="row-actions">
+      <button class="small-button" data-action="add-receipt" data-type="receita" data-id="${item.id}">Adicionar recebido</button>
+      ${item.status !== "recebido" ? `<button class="small-button" data-action="complete" data-type="receita" data-id="${item.id}">Marcar recebida</button>` : ""}
+      <button class="small-button" data-action="edit" data-type="receita" data-id="${item.id}">Editar</button>
+      <button class="danger-button" data-action="delete" data-type="receita" data-id="${item.id}">Excluir</button>
+    </div>
+  `;
+}
+
 function cardInvoiceActions(item) {
   return `
     <div class="row-actions">
@@ -810,12 +866,20 @@ async function handleRowAction(event) {
   if (!item) return;
 
   if (action === "edit") openEntryForm(type, id);
+  if (action === "add-receipt") {
+    await addRecebimentoReceita(item);
+    return;
+  }
   if (action === "delete") {
     state[schema.collection] = state[schema.collection].filter((entry) => entry.id !== id);
     render();
     await persistState("Excluindo na planilha...");
   }
   if (action === "complete") {
+    if (type === "receita") {
+      await completeReceita(item);
+      return;
+    }
     const expected = item.valorPrevisto || item.valorTotal || item.valor;
     item.valorRealizado = item.valorRealizado || expected;
     item.status = type === "receita" ? "recebido" : "pago";
@@ -825,6 +889,47 @@ async function handleRowAction(event) {
     render();
     await persistState("Atualizando pagamento na planilha...");
   }
+}
+
+async function addRecebimentoReceita(receita, defaults = {}) {
+  const amountInput = window.prompt(`Valor recebido de "${receita.descricao}"`, defaults.valor ? String(defaults.valor) : "");
+  if (amountInput === null) return;
+  const valor = parseMoney(String(amountInput).replace(/\./g, "").replace(",", "."));
+  if (valor <= 0) {
+    window.alert("Informe um valor maior que zero.");
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dataInput = window.prompt("Data do recebimento", defaults.data || today);
+  if (dataInput === null) return;
+
+  const observacoes = window.prompt("Observacao opcional", defaults.observacoes || "") || "";
+  const recebimentos = parseRecebimentos(receita);
+  recebimentos.push({
+    id: crypto.randomUUID(),
+    data: dataInput || today,
+    valor,
+    observacoes,
+  });
+  receita.recebimentos = serializeRecebimentos(recebimentos);
+  updateReceitaRecebida(receita);
+  render();
+  await persistState("Salvando recebimento na planilha...");
+}
+
+async function completeReceita(receita) {
+  const restante = Math.max(parseMoney(receita.valorPrevisto) - receitaValorRecebido(receita), 0);
+  if (restante <= 0) {
+    updateReceitaRecebida(receita);
+    render();
+    await persistState("Atualizando receita na planilha...");
+    return;
+  }
+  await addRecebimentoReceita(receita, {
+    valor: restante,
+    observacoes: "Complemento para marcar a receita como recebida.",
+  });
 }
 
 async function deleteCard(card) {
@@ -898,8 +1003,24 @@ function openEntryForm(type, id = null, initialData = null) {
   const schema = formSchemas[type];
   const item = id ? state[schema.collection].find((entry) => entry.id === id) : initialData;
   dom.dialogTitle.textContent = id ? `Editar ${schema.title.toLowerCase()}` : `Nova ${schema.title.toLowerCase()}`;
-  dom.dialogFields.innerHTML = schema.fields.map((field) => renderField(field, item)).join("");
+  dom.dialogFields.innerHTML = schema.fields.map((field) => renderField(field, item)).join("") + renderExtraFormContent(type, item);
   dom.entryDialog.showModal();
+}
+
+function renderExtraFormContent(type, item) {
+  if (type !== "receita" || !item) return "";
+  const recebimentos = parseRecebimentos(item);
+  const rows = recebimentos.length
+    ? recebimentos
+        .map((entry) => `<li>${entry.data || ""} - <strong>${money(entry.valor)}</strong>${entry.observacoes ? ` - ${escapeHtml(entry.observacoes)}` : ""}</li>`)
+        .join("")
+    : "<li>Nenhum recebimento parcial lancado.</li>";
+  return `
+    <div class="form-note">
+      <strong>Recebido ate agora: ${money(receitaValorRecebido(item))}</strong>
+      <ul>${rows}</ul>
+    </div>
+  `;
 }
 
 function renderField([name, label, type, required, options], item) {
@@ -956,15 +1077,18 @@ async function handleEntrySubmit(event) {
   const existing = editingId ? state[schema.collection].find((entry) => entry.id === editingId) : null;
   if (existing) {
     Object.assign(existing, data, { updatedAt: new Date().toISOString() });
+    if (currentFormType === "receita") updateReceitaRecebida(existing);
   } else {
-    state[schema.collection].push({
+    const nextEntry = {
       id: crypto.randomUUID(),
       collection: schema.collection,
       month: inferMonth(data),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...data,
-    });
+    };
+    if (currentFormType === "receita") updateReceitaRecebida(nextEntry);
+    state[schema.collection].push(nextEntry);
   }
 
   render();

@@ -104,10 +104,10 @@ applyMoney(sheets.meses, ["C", "D", "E"]);
 
 writeTable(
   sheets.receitas,
-  ["id", "month", "descricao", "valorPrevisto", "valorRealizado", "dataPrevista", "dataRealizada", "status", "recorrencia", "repetirPorMeses", "observacoes", "createdAt", "updatedAt"],
-  [["rec-001", month, "Salario", 0, 0, isoDate, "", "previsto", "sempre", "", "", isoDate, isoDate]],
+  ["id", "month", "descricao", "valorPrevisto", "valorRealizado", "dataPrevista", "dataRealizada", "status", "recorrencia", "repetirPorMeses", "observacoes", "createdAt", "updatedAt", "recebimentos"],
+  [["rec-001", month, "Salario", 0, 0, isoDate, "", "previsto", "sempre", "", "", isoDate, isoDate, "[]"]],
   "tbl_receitas",
-  [110, 90, 220, 130, 130, 120, 120, 110, 120, 140, 280, 120, 120],
+  [110, 90, 220, 130, 130, 120, 120, 110, 120, 140, 280, 120, 120, 360],
 );
 applyMoney(sheets.receitas, ["D", "E"]);
 applyDate(sheets.receitas, ["F", "G", "L", "M"]);

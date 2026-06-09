@@ -514,6 +514,21 @@ dialog::backdrop {
   gap: 4px 14px;
 }
 
+.form-note {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.form-note ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
 .empty {
   color: var(--muted);
   padding: 18px 0;

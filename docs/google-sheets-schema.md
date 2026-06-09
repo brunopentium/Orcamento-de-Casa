@@ -48,6 +48,7 @@ Chaves usadas pelo app:
 | observacoes |
 | createdAt |
 | updatedAt |
+| recebimentos |
 
 ## despesas
 
