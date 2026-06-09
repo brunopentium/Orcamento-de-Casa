@@ -52,7 +52,7 @@ Chaves usadas pelo app:
 
 ## despesas
 
-Use esta aba para as despesas gerais do mes, incluindo a linha do envelope `Gastos gerais do mes` e as faturas consolidadas dos cartoes.
+Use esta aba para as despesas gerais do mes, incluindo a linha do envelope `Gastos gerais do mes` e as faturas consolidadas dos cartoes. Os lancamentos da aba `gastos_gerais` nao entram separadamente no total de despesas pagas; eles apenas monitoram o consumo do envelope. A linha `Gastos gerais do mes` permanece no limite configurado, e sobe para o valor real somente quando os gastos lancados ultrapassam esse limite.
 
 | campo |
 | --- |

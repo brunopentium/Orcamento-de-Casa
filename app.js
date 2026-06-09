@@ -214,6 +214,7 @@ function sanitizeStateForSheets(nextState) {
     updateReceitaRecebida(nextReceita);
     return nextReceita;
   });
+  sanitized.despesas = sanitized.despesas.map((despesa) => effectiveExpenseRow(despesa, sanitized));
   return sanitized;
 }
 
@@ -326,6 +327,47 @@ function monthItems(collection) {
 
 function sum(items, key) {
   return items.reduce((total, item) => total + parseMoney(item[key]), 0);
+}
+
+function isGeneralSpendingExpense(item) {
+  const text = `${item?.descricao || ""} ${item?.categoria || ""}`.toLowerCase();
+  return text.includes("gastos gerais");
+}
+
+function generalSpendingLimit() {
+  return parseMoney(state.config.limiteGastosGerais) || 5500;
+}
+
+function generalSpendingUsed(targetMonth = activeMonth, sourceState = state) {
+  return (sourceState.gastos || [])
+    .filter((item) => belongsToMonthFor(item, targetMonth))
+    .reduce((total, item) => total + parseMoney(item.valor), 0);
+}
+
+function effectiveGeneralSpendingAmount(targetMonth = activeMonth, sourceState = state) {
+  const limit = parseMoney(sourceState.config?.limiteGastosGerais) || generalSpendingLimit();
+  return Math.max(limit, generalSpendingUsed(targetMonth, sourceState));
+}
+
+function belongsToMonthFor(item, targetMonth) {
+  if (item.month) return item.month === targetMonth;
+  const date = item.data || item.vencimento || item.dataPrevista || item.primeiraFatura;
+  return String(date || "").startsWith(targetMonth);
+}
+
+function effectiveExpenseRow(item, sourceState = state) {
+  if (!isGeneralSpendingExpense(item)) return item;
+  const targetMonth = item.month || String(item.vencimento || item.dataPrevista || activeMonth).slice(0, 7);
+  const effectiveAmount = effectiveGeneralSpendingAmount(targetMonth, sourceState);
+  return {
+    ...item,
+    valorPrevisto: effectiveAmount,
+    valorRealizado: item.status === "pago" ? effectiveAmount : parseMoney(item.valorRealizado),
+  };
+}
+
+function effectiveExpenseRows(items, sourceState = state) {
+  return items.map((item) => effectiveExpenseRow(item, sourceState));
 }
 
 function parseRecebimentos(receita) {
@@ -602,7 +644,7 @@ function render() {
 
 function renderDashboard() {
   const receitas = monthItems("receitas");
-  const despesas = monthItems("despesas");
+  const despesas = effectiveExpenseRows(monthItems("despesas"));
   const faturas = calculatedCardInvoices().filter((item) => item.valorPrevisto || item.valorRealizado);
   const gastos = monthItems("gastos");
 
@@ -615,8 +657,8 @@ function renderDashboard() {
   const despesasPrevistasComCartoes = despesasPrevistas + cartoesPrevistos;
   const despesasPagasComCartoes = despesasPagas + cartoesPagos;
   const gastosUsados = sum(gastos, "valor");
-  const limite = parseMoney(state.config.limiteGastosGerais);
-  const despesasAtuais = despesasPagas + cartoesPagos + gastosUsados;
+  const limite = generalSpendingLimit();
+  const despesasAtuais = despesasPagas + cartoesPagos;
   const saldoAtualApp = receitasRecebidas - despesasAtuais;
 
   setText("metricReceitasPrevistas", money(receitasPrevistas));
@@ -629,7 +671,7 @@ function renderDashboard() {
   setText("metricSaldoReal", `Saldo atual no app: ${money(saldoAtualApp)}`);
   setText("metricReceitasAtuais", money(receitasRecebidas));
   setText("metricDespesasAtuais", money(despesasAtuais));
-  setText("metricDespesasAtuaisDetalhe", `Despesas: ${money(despesasPagas)} | Cartoes: ${money(cartoesPagos)} | Gastos: ${money(gastosUsados)}`);
+  setText("metricDespesasAtuaisDetalhe", `Despesas: ${money(despesasPagas)} | Cartoes: ${money(cartoesPagos)} | Gastos monitorados: ${money(gastosUsados)}`);
   setText("metricSaldoAtualApp", money(saldoAtualApp));
 
   const percent = limite > 0 ? Math.min((gastosUsados / limite) * 100, 100) : 0;
@@ -700,7 +742,7 @@ function renderReceitas() {
 }
 
 function renderDespesas() {
-  const despesas = monthItems("despesas").map((item) => ({ ...item, rowKind: "despesa" }));
+  const despesas = effectiveExpenseRows(monthItems("despesas")).map((item) => ({ ...item, rowKind: "despesa" }));
   const cardExpenses = calculatedCardInvoices()
     .filter((item) => item.valorPrevisto || item.valorRealizado || item.sourceInvoiceId)
     .map((item) => ({
@@ -880,7 +922,8 @@ async function handleRowAction(event) {
       await completeReceita(item);
       return;
     }
-    const expected = item.valorPrevisto || item.valorTotal || item.valor;
+    const expected = type === "despesa" && isGeneralSpendingExpense(item) ? effectiveGeneralSpendingAmount(item.month || activeMonth) : item.valorPrevisto || item.valorTotal || item.valor;
+    if (type === "despesa" && isGeneralSpendingExpense(item)) item.valorPrevisto = expected;
     item.valorRealizado = item.valorRealizado || expected;
     item.status = type === "receita" ? "recebido" : "pago";
     item.dataPagamento = item.dataPagamento || new Date().toISOString().slice(0, 10);
