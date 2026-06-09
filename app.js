@@ -1,4 +1,8 @@
 const STORAGE_KEY = "orcamentoCasa.v1";
+const READ_ONLY_STORAGE_KEY = "orcamentoCasa.readOnlyUnlocked.v1";
+const READ_ONLY_PASSWORD = "Carol2026";
+const READ_ONLY_TOKEN = "ok";
+const readOnlyMode = new URLSearchParams(window.location.search).get("leitura") === "1";
 
 const categories = [
   "Moradia",
@@ -179,6 +183,7 @@ let activeCardName = "";
 let currentFormType = null;
 let editingId = null;
 let dashboardDrilldowns = new Map();
+let appStarted = false;
 
 const dom = {
   pageTitle: document.querySelector("#pageTitle"),
@@ -288,6 +293,11 @@ function setSyncStatus(message, variant = "") {
 }
 
 async function persistState(message = "Sincronizando com Google Sheets...") {
+  if (readOnlyMode) {
+    setSyncStatus("Acesso somente leitura. Nenhuma alteracao enviada.", "ok");
+    return { ok: true, readOnly: true };
+  }
+
   saveState();
   setSyncStatus(message);
 
@@ -315,7 +325,7 @@ async function loadFromSheets() {
   saveState();
   render();
 
-  if (hasLocalRowsNotInRemote(previousState, result.data)) {
+  if (!readOnlyMode && hasLocalRowsNotInRemote(previousState, result.data)) {
     await persistState("Enviando lancamentos locais pendentes...");
     return;
   }
@@ -789,11 +799,77 @@ function futureInvoicesForCard(card, months = 6) {
 }
 
 function init() {
+  if (readOnlyMode) setupReadOnlyMode();
+  if (readOnlyMode && !isReadOnlyUnlocked()) {
+    showReadOnlyGate();
+    return;
+  }
+  startApp();
+}
+
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
   dom.monthInput.value = activeMonth;
+  if (dom.gastoRapidoForm?.data) dom.gastoRapidoForm.data.value = new Date().toISOString().slice(0, 10);
   populateCategorySelects();
   bindEvents();
   render();
   loadFromSheets();
+}
+
+function setupReadOnlyMode() {
+  document.body.classList.add("read-only-mode");
+  document.querySelector(".brand p").textContent = "Somente leitura";
+  document.querySelector('[data-view="config"]')?.remove();
+
+  const topbar = document.querySelector(".topbar");
+  if (topbar && !document.querySelector(".read-only-badge")) {
+    const badge = document.createElement("span");
+    badge.className = "read-only-badge";
+    badge.textContent = "Acesso somente leitura";
+    topbar.querySelector("div")?.appendChild(badge);
+  }
+}
+
+function isReadOnlyUnlocked() {
+  return localStorage.getItem(READ_ONLY_STORAGE_KEY) === READ_ONLY_TOKEN;
+}
+
+function showReadOnlyGate() {
+  document.body.classList.add("locked-mode");
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <section class="access-gate" aria-labelledby="accessGateTitle">
+        <form class="access-card" id="readOnlyAccessForm">
+          <div class="brand-mark">OC</div>
+          <h2 id="accessGateTitle">Orcamento de Casa</h2>
+          <p>Acesso somente leitura</p>
+          <label>
+            Senha
+            <input type="password" name="password" autocomplete="current-password" required autofocus />
+          </label>
+          <button class="primary-button" type="submit">Entrar</button>
+          <small id="accessGateError" role="alert"></small>
+        </form>
+      </section>
+    `,
+  );
+
+  document.querySelector("#readOnlyAccessForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const password = new FormData(event.currentTarget).get("password");
+    if (password !== READ_ONLY_PASSWORD) {
+      document.querySelector("#accessGateError").textContent = "Senha incorreta.";
+      return;
+    }
+
+    localStorage.setItem(READ_ONLY_STORAGE_KEY, READ_ONLY_TOKEN);
+    document.body.classList.remove("locked-mode");
+    document.querySelector(".access-gate")?.remove();
+    startApp();
+  });
 }
 
 function bindEvents() {
@@ -812,9 +888,11 @@ function bindEvents() {
     button.addEventListener("click", () => openEntryForm(button.dataset.openForm));
   });
 
-  dom.entryForm.addEventListener("submit", handleEntrySubmit);
-  dom.gastoRapidoForm.addEventListener("submit", handleQuickGasto);
-  dom.configForm.addEventListener("submit", handleConfigSubmit);
+  if (!readOnlyMode) {
+    dom.entryForm.addEventListener("submit", handleEntrySubmit);
+    dom.gastoRapidoForm.addEventListener("submit", handleQuickGasto);
+    dom.configForm.addEventListener("submit", handleConfigSubmit);
+  }
   document.querySelector("#dashboardView").addEventListener("click", handleDashboardDrillClick);
   document.querySelector("#dashboardView").addEventListener("keydown", (event) => {
     if ((event.key === "Enter" || event.key === " ") && event.target?.dataset?.drillKey) {
@@ -825,6 +903,7 @@ function bindEvents() {
 }
 
 function switchView(view) {
+  if (readOnlyMode && view === "config") view = "dashboard";
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
@@ -1230,6 +1309,7 @@ function renderRows(targetId, items, mapper) {
 }
 
 function actions(type, id, completeLabel) {
+  if (readOnlyMode) return "";
   return `
     <div class="row-actions">
       ${completeLabel ? `<button class="small-button" data-action="complete" data-type="${type}" data-id="${id}">${completeLabel}</button>` : ""}
@@ -1240,6 +1320,7 @@ function actions(type, id, completeLabel) {
 }
 
 function receitaActions(item) {
+  if (readOnlyMode) return "";
   return `
     <div class="row-actions">
       <button class="small-button" data-action="add-receipt" data-type="receita" data-id="${item.id}">Adicionar recebido</button>
@@ -1251,6 +1332,7 @@ function receitaActions(item) {
 }
 
 function cardInvoiceActions(item) {
+  if (readOnlyMode) return "";
   return `
     <div class="row-actions">
       ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
@@ -1262,6 +1344,7 @@ function cardInvoiceActions(item) {
 }
 
 function cardExpenseActions(item) {
+  if (readOnlyMode) return "";
   return `
     <div class="row-actions">
       ${item.status !== "pago" ? `<button class="small-button" data-action="pay-card-invoice" data-card="${escapeHtml(item.cartao)}">Marcar paga</button>` : ""}
@@ -1278,6 +1361,8 @@ async function handleRowAction(event) {
     renderCartoes();
     return;
   }
+
+  if (readOnlyMode) return;
 
   if (action === "edit-card") {
     const item = (state.cartoes || []).find((entry) => cardName(entry) === card);
@@ -1332,6 +1417,7 @@ async function handleRowAction(event) {
 }
 
 async function addRecebimentoReceita(receita, defaults = {}) {
+  if (readOnlyMode) return;
   const amountInput = window.prompt(`Valor recebido de "${receita.descricao}"`, defaults.valor ? String(defaults.valor) : "");
   if (amountInput === null) return;
   const valor = parseMoney(String(amountInput).replace(/\./g, "").replace(",", "."));
@@ -1359,6 +1445,7 @@ async function addRecebimentoReceita(receita, defaults = {}) {
 }
 
 async function completeReceita(receita) {
+  if (readOnlyMode) return;
   const restante = Math.max(parseMoney(receita.valorPrevisto) - receitaValorRecebido(receita), 0);
   if (restante <= 0) {
     updateReceitaRecebida(receita);
@@ -1373,6 +1460,7 @@ async function completeReceita(receita) {
 }
 
 async function deleteCard(card) {
+  if (readOnlyMode) return;
   const purchases = (state.compras || []).filter((item) => item.cartao === card).length;
   const invoices = (state.faturas || []).filter((item) => item.cartao === card).length;
   const message = `Excluir o cartao "${card}"? Isso tambem remove ${purchases} compra(s)/parcela(s) e ${invoices} fatura(s) vinculada(s).`;
@@ -1391,6 +1479,7 @@ async function deleteCard(card) {
 }
 
 function openCardInvoiceForm(card) {
+  if (readOnlyMode) return;
   const invoice = invoiceForCardMonth(card);
   const summary = calculatedCardInvoices().find((item) => item.cartao === card);
   openEntryForm("fatura", invoice?.id || null, {
@@ -1405,6 +1494,7 @@ function openCardInvoiceForm(card) {
 }
 
 async function markCardInvoicePaid(card) {
+  if (readOnlyMode) return;
   const invoiceSummary = calculatedCardInvoices().find((item) => item.cartao === card);
   if (!invoiceSummary) return;
 
@@ -1438,6 +1528,7 @@ async function markCardInvoicePaid(card) {
 }
 
 function openEntryForm(type, id = null, initialData = null) {
+  if (readOnlyMode) return;
   currentFormType = type;
   editingId = id;
   const schema = formSchemas[type];
@@ -1667,5 +1758,4 @@ class GoogleSheetsGateway {
   }
 }
 
-dom.gastoRapidoForm.data.value = new Date().toISOString().slice(0, 10);
 init();
