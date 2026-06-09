@@ -14,6 +14,18 @@ const categories = [
   "Farmacia",
   "Alimentacao fora",
   "Casa",
+  "Vestuario",
+  "Pet",
+  "Beleza",
+  "Carro",
+  "Manutencao",
+  "Viagem",
+  "Presentes",
+  "Servicos",
+  "Assinaturas",
+  "Impostos",
+  "Seguros",
+  "Investimentos",
   "Lazer",
   "Outros",
 ];
@@ -39,7 +51,7 @@ const formSchemas = {
     title: "Despesa geral",
     collection: "despesas",
     fields: [
-      ["descricao", "Descricao", "text", true],
+      ["descricao", "Descricao", "text", false],
       ["categoria", "Categoria", "category", true],
       ["valorPrevisto", "Valor previsto", "number", true],
       ["valorRealizado", "Valor pago", "number", false],
@@ -80,7 +92,7 @@ const formSchemas = {
     title: "Compra no cartao",
     collection: "compras",
     fields: [
-      ["descricao", "Descricao", "text", true],
+      ["descricao", "Descricao", "text", false],
       ["cartao", "Cartao", "text", true],
       ["categoria", "Categoria", "category", true],
       ["valorTotal", "Valor total", "number", true],
@@ -96,7 +108,7 @@ const formSchemas = {
     collection: "gastos",
     fields: [
       ["data", "Data", "date", true],
-      ["descricao", "Descricao", "text", true],
+      ["descricao", "Descricao", "text", false],
       ["categoria", "Categoria", "category", true],
       ["valor", "Valor", "number", true],
       ["formaPagamento", "Forma de pagamento", "select", true, ["Pix", "Debito", "Credito", "Dinheiro"]],
@@ -108,7 +120,7 @@ const formSchemas = {
     collection: "investimentos",
     fields: [
       ["data", "Data", "date", true],
-      ["descricao", "Descricao", "text", true],
+      ["descricao", "Descricao", "text", false],
       ["tipo", "Tipo", "select", true, ["saldo inicial", "entrada", "saida", "devolucao"]],
       ["valor", "Valor", "number", true],
       ["conta", "Conta/aplicacao", "text", false],
@@ -1414,6 +1426,7 @@ async function handleEntrySubmit(event) {
   schema.fields.forEach(([name, , type]) => {
     if (type === "number") data[name] = parseMoney(data[name]);
   });
+  applyDefaultDescription(data);
   normalizeCardPurchaseFormData(data);
 
   const existing = editingId ? state[schema.collection].find((entry) => entry.id === editingId) : null;
@@ -1438,6 +1451,15 @@ async function handleEntrySubmit(event) {
   await persistState("Salvando lancamento na planilha...");
 }
 
+function applyDefaultDescription(data) {
+  if (String(data.descricao || "").trim()) {
+    data.descricao = String(data.descricao).trim();
+    return;
+  }
+  const fallback = data.categoria || data.tipo || data.origemDestino || "";
+  if (fallback) data.descricao = fallback;
+}
+
 function normalizeCardPurchaseFormData(data) {
   if (currentFormType !== "compra") return;
 
@@ -1459,6 +1481,7 @@ function inferMonth(data) {
 async function handleQuickGasto(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(dom.gastoRapidoForm).entries());
+  applyDefaultDescription(data);
   state.gastos.push({
     id: crypto.randomUUID(),
     collection: "gastos",
