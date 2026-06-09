@@ -55,6 +55,7 @@ button {
   margin-bottom: 28px;
 }
 
+.brand-logo,
 .brand-mark {
   display: grid;
   place-items: center;
@@ -64,6 +65,14 @@ button {
   background: #d8efe1;
   color: #15392f;
   font-weight: 800;
+}
+
+.brand-logo {
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 2px;
 }
 
 .brand h1,
