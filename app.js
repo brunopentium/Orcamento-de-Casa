@@ -390,7 +390,8 @@ function renderDonutChart(items, options = {}) {
     .map((item, index) => {
       const share = item.value / total;
       const dash = share * circumference;
-      const segment = `<circle class="donut-segment" cx="60" cy="60" r="${radius}" fill="none" stroke="${chartColors[index % chartColors.length]}" stroke-width="18" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" />`;
+      const color = item.color || chartColors[index % chartColors.length];
+      const segment = `<circle class="donut-segment" cx="60" cy="60" r="${radius}" fill="none" stroke="${color}" stroke-width="18" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" />`;
       offset += dash;
       return segment;
     })
@@ -399,9 +400,10 @@ function renderDonutChart(items, options = {}) {
   const legend = rows
     .map((item, index) => {
       const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+      const color = item.color || chartColors[index % chartColors.length];
       return `
         <div class="chart-legend-row">
-          <span class="legend-dot" style="background:${chartColors[index % chartColors.length]}"></span>
+          <span class="legend-dot" style="background:${color}"></span>
           <span>${escapeHtml(item.label)}</span>
           <strong>${money(item.value)}</strong>
           <small>${percent}%</small>
@@ -506,6 +508,11 @@ function renderLineChart(items, options = {}) {
 function isGeneralSpendingExpense(item) {
   const text = `${item?.descricao || ""} ${item?.categoria || ""}`.toLowerCase();
   return text.includes("gastos gerais");
+}
+
+function isCardExpensePlaceholder(item) {
+  const text = `${item?.descricao || ""} ${item?.categoria || ""}`.toLowerCase();
+  return text.includes("cartao") || text.includes("cartão");
 }
 
 function generalSpendingLimit() {
@@ -882,27 +889,38 @@ function renderDashboard() {
 }
 
 function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsados }) {
-  const despesasSemEnvelope = despesas.filter((item) => !isGeneralSpendingExpense(item));
-  const despesasGeraisValor = sum(despesasSemEnvelope, "valorPrevisto");
+  const limite = generalSpendingLimit();
+  const envelopeDisponivel = Math.max(limite - gastosUsados, 0);
+  const despesasSemConsolidados = despesas.filter((item) => !isGeneralSpendingExpense(item) && !isCardExpensePlaceholder(item));
+  const despesasGeraisValor = sum(despesasSemConsolidados, "valorPrevisto");
+  const cardPurchases = getCardNames().flatMap((card) => cardPurchasesForMonth(card).map((item) => ({ ...item, cartao: card })));
+  const despesasCategoryRows = chartRowsFromGroup(groupSum(despesasSemConsolidados, (item) => item.categoria, (item) => item.valorPrevisto), 12);
+  const cardCategoryRows = chartRowsFromGroup(groupSum(cardPurchases, (item) => item.categoria, (item) => item.valorParcela), 12);
+  const gastosCategoryRows = chartRowsFromGroup(groupSum(gastos, (item) => item.categoria, (item) => item.valor), 12);
 
   setChart("monthlyCompositionChart", renderDonutChart([
-    { label: "Despesas gerais", value: despesasGeraisValor },
-    { label: "Cartoes", value: cartoesPrevistos },
-    { label: "Gastos gerais usados", value: gastosUsados },
+    { label: "Despesas gerais", value: despesasGeraisValor, color: "#226a5c" },
+    { label: "Cartoes", value: cartoesPrevistos, color: "#bc5d35" },
+    { label: "Gastos gerais usados", value: gastosUsados, color: "#2f6fb0" },
+    { label: "Gastos gerais disponivel", value: envelopeDisponivel, color: "#cfe0f3" },
   ], { centerLabel: "Mes", empty: "Ainda nao ha valores previstos neste mes." }));
 
-  setChart("generalSpendingChart", renderDonutChart(chartRowsFromGroup(groupSum(gastos, (item) => item.categoria, (item) => item.valor)), {
+  setChart("allCategoriesChart", renderDonutChart(mergeChartRows(despesasCategoryRows, cardCategoryRows, gastosCategoryRows), {
+    centerLabel: "Geral",
+    empty: "Ainda nao ha categorias para consolidar.",
+  }));
+
+  setChart("cardAndGeneralSpendingChart", renderDonutChart(mergeChartRows(cardCategoryRows, gastosCategoryRows), {
+    centerLabel: "Dia a dia",
+    empty: "Ainda nao ha compras de cartao ou gastos gerais.",
+  }));
+
+  setChart("generalSpendingChart", renderDonutChart(gastosCategoryRows, {
     centerLabel: "Usado",
     empty: "Ainda nao ha gastos gerais lancados.",
   }));
 
-  setChart("generalExpensesChart", renderDonutChart(chartRowsFromGroup(groupSum(despesasSemEnvelope, (item) => item.categoria, (item) => item.valorPrevisto)), {
-    centerLabel: "Despesas",
-    empty: "Ainda nao ha despesas gerais por categoria.",
-  }));
-
-  const cardPurchases = getCardNames().flatMap((card) => cardPurchasesForMonth(card).map((item) => ({ ...item, cartao: card })));
-  setChart("cardCategoriesChart", renderDonutChart(chartRowsFromGroup(groupSum(cardPurchases, (item) => item.categoria, (item) => item.valorParcela)), {
+  setChart("cardCategoriesChart", renderDonutChart(cardCategoryRows, {
     centerLabel: "Cartoes",
     empty: "Ainda nao ha compras de cartao neste mes.",
   }));
@@ -919,6 +937,14 @@ function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsado
     return { label: monthShortLabel(targetMonth), value: investmentBalanceUntil(targetMonth) };
   });
   setChart("investmentEvolutionChart", renderLineChart(investmentEvolution, { empty: "Nao ha movimentacoes de investimento." }));
+}
+
+function mergeChartRows(...rowGroups) {
+  const grouped = rowGroups.flat().reduce((acc, item) => {
+    acc[item.label] = (acc[item.label] || 0) + parseMoney(item.value);
+    return acc;
+  }, {});
+  return chartRowsFromGroup(grouped, 12);
 }
 
 function setChart(id, html) {

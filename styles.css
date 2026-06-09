@@ -455,6 +455,8 @@ td {
 }
 
 .chart-layout {
+  display: grid;
+  align-items: center;
   min-height: 260px;
 }
 
@@ -469,15 +471,19 @@ td {
 
 .donut-chart {
   display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(130px, 190px) minmax(0, 1fr);
   align-items: center;
   gap: 18px;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 .donut-chart svg {
   width: 100%;
-  max-width: 220px;
+  max-width: 190px;
   aspect-ratio: 1;
+  justify-self: center;
 }
 
 .donut-segment {
@@ -486,14 +492,14 @@ td {
 
 .donut-total-label {
   fill: var(--muted);
-  font-size: 9px;
+  font-size: 7px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .donut-total-value {
   fill: var(--text);
-  font-size: 10px;
+  font-size: 7.5px;
   font-weight: 800;
 }
 
@@ -517,7 +523,7 @@ td {
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .chart-legend-row strong {
@@ -530,6 +536,7 @@ td {
 }
 
 .legend-dot {
+  display: block;
   width: 10px;
   height: 10px;
   border-radius: 999px;
@@ -744,6 +751,11 @@ dialog::backdrop {
 
   .donut-chart {
     grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+
+  .donut-chart svg {
+    max-width: 240px;
   }
 }
 
