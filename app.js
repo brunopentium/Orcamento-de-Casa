@@ -178,6 +178,7 @@ let activeMonth = monthKey(new Date());
 let activeCardName = "";
 let currentFormType = null;
 let editingId = null;
+let dashboardDrilldowns = new Map();
 
 const dom = {
   pageTitle: document.querySelector("#pageTitle"),
@@ -186,6 +187,9 @@ const dom = {
   entryForm: document.querySelector("#entryForm"),
   dialogTitle: document.querySelector("#dialogTitle"),
   dialogFields: document.querySelector("#dialogFields"),
+  drilldownDialog: document.querySelector("#drilldownDialog"),
+  drilldownTitle: document.querySelector("#drilldownTitle"),
+  drilldownChart: document.querySelector("#drilldownChart"),
   gastoRapidoForm: document.querySelector("#gastoRapidoForm"),
   configForm: document.querySelector("#configForm"),
   syncStatus: document.querySelector("#syncStatus"),
@@ -403,7 +407,8 @@ function renderDonutChart(items, options = {}) {
       const share = item.value / total;
       const dash = share * circumference;
       const color = item.color || chartColors[index % chartColors.length];
-      const segment = `<circle class="donut-segment" cx="60" cy="60" r="${radius}" fill="none" stroke="${color}" stroke-width="18" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" />`;
+      const drillAttrs = item.drillKey ? `data-drill-key="${escapeHtml(item.drillKey)}" tabindex="0"` : "";
+      const segment = `<circle class="donut-segment ${item.drillKey ? "drillable" : ""}" ${drillAttrs} cx="60" cy="60" r="${radius}" fill="none" stroke="${color}" stroke-width="18" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" />`;
       offset += dash;
       return segment;
     })
@@ -413,8 +418,9 @@ function renderDonutChart(items, options = {}) {
     .map((item, index) => {
       const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
       const color = item.color || chartColors[index % chartColors.length];
+      const drillAttrs = item.drillKey ? `data-drill-key="${escapeHtml(item.drillKey)}" role="button" tabindex="0"` : "";
       return `
-        <div class="chart-legend-row">
+        <div class="chart-legend-row ${item.drillKey ? "drillable" : ""}" ${drillAttrs}>
           <span class="legend-dot" style="background:${color}"></span>
           <span>${escapeHtml(item.label)}</span>
           <strong>${money(item.value)}</strong>
@@ -809,6 +815,13 @@ function bindEvents() {
   dom.entryForm.addEventListener("submit", handleEntrySubmit);
   dom.gastoRapidoForm.addEventListener("submit", handleQuickGasto);
   dom.configForm.addEventListener("submit", handleConfigSubmit);
+  document.querySelector("#dashboardView").addEventListener("click", handleDashboardDrillClick);
+  document.querySelector("#dashboardView").addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target?.dataset?.drillKey) {
+      event.preventDefault();
+      handleDashboardDrillClick(event);
+    }
+  });
 }
 
 function switchView(view) {
@@ -901,14 +914,19 @@ function renderDashboard() {
 }
 
 function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsados }) {
+  dashboardDrilldowns = new Map();
   const limite = generalSpendingLimit();
   const envelopeDisponivel = Math.max(limite - gastosUsados, 0);
   const despesasSemConsolidados = despesas.filter((item) => !isGeneralSpendingExpense(item) && !isCardExpensePlaceholder(item));
   const despesasGeraisValor = sum(despesasSemConsolidados, "valorPrevisto");
   const cardPurchases = getCardNames().flatMap((card) => cardPurchasesForMonth(card).map((item) => ({ ...item, cartao: card })));
-  const despesasCategoryRows = chartRowsFromGroup(groupSum(despesasSemConsolidados, (item) => item.categoria, (item) => item.valorPrevisto), 12);
-  const cardCategoryRows = chartRowsFromGroup(groupSum(cardPurchases, (item) => item.categoria, (item) => item.valorParcela), 12);
-  const gastosCategoryRows = chartRowsFromGroup(groupSum(gastos, (item) => item.categoria, (item) => item.valor), 12);
+  const expenseDetails = despesasSemConsolidados.map((item) => detailRow(item.categoria, item.descricao, item.valorPrevisto, "Despesa geral"));
+  const cardDetails = cardPurchases.map((item) => detailRow(item.categoria, item.descricao, item.valorParcela, item.cartao || "Cartao"));
+  const spendingDetails = gastos.map((item) => detailRow(item.categoria, item.descricao, item.valor, "Gastos gerais"));
+  const allCategoryRows = categoryRowsWithDrill("all", "Distribuicao geral", [...expenseDetails, ...cardDetails, ...spendingDetails]);
+  const cardAndSpendingRows = categoryRowsWithDrill("card-spending", "Cartoes + gastos gerais", [...cardDetails, ...spendingDetails]);
+  const gastosCategoryRows = categoryRowsWithDrill("spending", "Gastos gerais", spendingDetails);
+  const cardCategoryRows = categoryRowsWithDrill("cards", "Cartoes", cardDetails);
 
   setChart("monthlyCompositionChart", renderDonutChart([
     { label: "Despesas gerais", value: despesasGeraisValor, color: "#226a5c" },
@@ -917,12 +935,12 @@ function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsado
     { label: "Gastos gerais disponivel", value: envelopeDisponivel, color: "#cfe0f3" },
   ], { centerLabel: "Mes", empty: "Ainda nao ha valores previstos neste mes." }));
 
-  setChart("allCategoriesChart", renderDonutChart(mergeChartRows(despesasCategoryRows, cardCategoryRows, gastosCategoryRows), {
+  setChart("allCategoriesChart", renderDonutChart(allCategoryRows, {
     centerLabel: "Geral",
     empty: "Ainda nao ha categorias para consolidar.",
   }));
 
-  setChart("cardAndGeneralSpendingChart", renderDonutChart(mergeChartRows(cardCategoryRows, gastosCategoryRows), {
+  setChart("cardAndGeneralSpendingChart", renderDonutChart(cardAndSpendingRows, {
     centerLabel: "Dia a dia",
     empty: "Ainda nao ha compras de cartao ou gastos gerais.",
   }));
@@ -951,17 +969,85 @@ function renderDashboardCharts({ despesas, gastos, cartoesPrevistos, gastosUsado
   setChart("investmentEvolutionChart", renderLineChart(investmentEvolution, { empty: "Nao ha movimentacoes de investimento." }));
 }
 
-function mergeChartRows(...rowGroups) {
-  const grouped = rowGroups.flat().reduce((acc, item) => {
-    acc[item.label] = (acc[item.label] || 0) + parseMoney(item.value);
+function detailRow(category, description, value, source) {
+  return {
+    category: category || "Sem categoria",
+    description: description || category || "Sem descricao",
+    value: parseMoney(value),
+    source,
+  };
+}
+
+function categoryRowsWithDrill(scopeKey, scopeTitle, detailRows) {
+  const grouped = detailRows.reduce((acc, row) => {
+    if (!row.value) return acc;
+    const key = row.category || "Sem categoria";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
     return acc;
   }, {});
-  return chartRowsFromGroup(grouped, 12);
+
+  return Object.entries(grouped)
+    .map(([category, rows]) => {
+      const drillKey = `${scopeKey}:${normalizeText(category)}`;
+      dashboardDrilldowns.set(drillKey, {
+        title: `${scopeTitle} - ${category}`,
+        rows: groupDescriptionRows(rows),
+      });
+      return {
+        label: category,
+        value: rows.reduce((total, row) => total + parseMoney(row.value), 0),
+        drillKey,
+      };
+    })
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12);
+}
+
+function groupDescriptionRows(rows) {
+  const grouped = rows.reduce((acc, row) => {
+    const key = normalizeText(row.description || row.category || "Sem descricao");
+    if (!acc[key]) {
+      acc[key] = {
+        label: row.description || row.category || "Sem descricao",
+        value: 0,
+      };
+    }
+    acc[key].value += parseMoney(row.value);
+    return acc;
+  }, {});
+  return Object.values(grouped)
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12);
 }
 
 function setChart(id, html) {
   const element = document.querySelector(`#${id}`);
   if (element) element.innerHTML = html;
+}
+
+function handleDashboardDrillClick(event) {
+  const target = findDrillTarget(event.target);
+  if (!target) return;
+  const detail = dashboardDrilldowns.get(target.dataset.drillKey);
+  if (!detail || !detail.rows?.length) return;
+  dom.drilldownTitle.textContent = detail.title;
+  dom.drilldownChart.innerHTML = renderDonutChart(detail.rows, {
+    centerLabel: "Detalhe",
+    empty: "Sem detalhes para esta categoria.",
+  });
+  dom.drilldownDialog.showModal();
+}
+
+function findDrillTarget(target) {
+  let current = target;
+  while (current && current !== document) {
+    if (current.dataset?.drillKey) return current;
+    current = current.parentNode;
+  }
+  return null;
 }
 
 function monthShortLabel(month) {

@@ -669,6 +669,31 @@ td {
   stroke-linecap: butt;
 }
 
+.donut-segment.drillable,
+.chart-legend-row.drillable {
+  cursor: pointer;
+}
+
+.donut-segment.drillable {
+  pointer-events: stroke;
+}
+
+.donut-segment.drillable:hover {
+  opacity: 0.82;
+}
+
+.chart-legend-row.drillable {
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+
+.chart-legend-row.drillable:hover,
+.chart-legend-row.drillable:focus {
+  background: var(--surface-2);
+  outline: 0;
+}
+
 .donut-total-label {
   fill: var(--muted);
   font-size: 7px;
@@ -857,6 +882,14 @@ dialog::backdrop {
 
 .dialog-card {
   padding: 18px;
+}
+
+.drilldown-card {
+  width: min(820px, calc(100vw - 28px));
+}
+
+.drilldown-chart {
+  min-height: 300px;
 }
 
 .dialog-heading,
