@@ -377,7 +377,104 @@ function belongsToMonth(item) {
 }
 
 function monthItems(collection) {
+  if (collection === "receitas" || collection === "despesas") {
+    return recurringMonthItems(collection, activeMonth);
+  }
   return state[collection].filter(belongsToMonth);
+}
+
+function recurringMonthItems(collection, targetMonth) {
+  const rows = state[collection] || [];
+  const exactRows = rows.filter((item) => belongsToMonthFor(item, targetMonth));
+  const materializedKeys = new Set(exactRows.map((item) => item.sourceRecurringId || item.id));
+  const virtualRows = rows
+    .filter((item) => !item.sourceRecurringId)
+    .filter((item) => recurringCoversMonth(item, targetMonth))
+    .filter((item) => !belongsToMonthFor(item, targetMonth))
+    .filter((item) => !materializedKeys.has(item.id))
+    .map((item) => recurringOccurrenceForMonth(item, targetMonth));
+
+  return [...exactRows, ...virtualRows];
+}
+
+function recurringCoversMonth(item, targetMonth) {
+  const recurrence = item.recorrencia || "nao";
+  if (recurrence === "nao") return false;
+  const startMonth = itemStartMonth(item);
+  const diff = monthDiff(startMonth, targetMonth);
+  if (diff < 0) return false;
+  if (recurrence === "sempre") return true;
+  if (recurrence === "meses") {
+    const totalMonths = Number.parseInt(item.repetirPorMeses, 10) || 0;
+    return totalMonths > 0 && diff < totalMonths;
+  }
+  return false;
+}
+
+function recurringOccurrenceForMonth(item, targetMonth) {
+  const occurrence = {
+    ...item,
+    id: virtualRecurringId(item.id, targetMonth),
+    sourceRecurringId: item.id,
+    virtualOccurrence: true,
+    month: targetMonth,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+
+  if (item.collection === "receitas") {
+    occurrence.dataPrevista = dateInMonth(item.dataPrevista || item.month, targetMonth);
+    occurrence.dataRealizada = "";
+    occurrence.valorRealizado = 0;
+    occurrence.recebimentos = "";
+    occurrence.status = "previsto";
+  }
+
+  if (item.collection === "despesas") {
+    occurrence.vencimento = dateInMonth(item.vencimento || item.month, targetMonth);
+    occurrence.dataPagamento = "";
+    occurrence.valorRealizado = 0;
+    occurrence.status = "previsto";
+  }
+
+  return occurrence;
+}
+
+function materializeRecurringOccurrence(item) {
+  if (!item?.virtualOccurrence) return item;
+  const copy = {
+    ...item,
+    id: crypto.randomUUID(),
+    recorrencia: "nao",
+    repetirPorMeses: "",
+    virtualOccurrence: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  state[item.collection].push(copy);
+  return copy;
+}
+
+function findCollectionItem(collection, id) {
+  return (state[collection] || []).find((entry) => entry.id === id) || monthItems(collection).find((entry) => entry.id === id);
+}
+
+function virtualRecurringId(id, targetMonth) {
+  return `virtual:${id}:${targetMonth}`;
+}
+
+function itemStartMonth(item) {
+  return String(item.month || item.dataPrevista || item.vencimento || activeMonth).slice(0, 7);
+}
+
+function dateInMonth(sourceDate, targetMonth) {
+  const day = Math.min(Number.parseInt(String(sourceDate || "").slice(8, 10), 10) || 1, daysInMonth(targetMonth));
+  return `${targetMonth}-${String(day).padStart(2, "0")}`;
+}
+
+function daysInMonth(month) {
+  const [year, monthNumber] = String(month).slice(0, 7).split("-").map(Number);
+  return new Date(year, monthNumber, 0).getDate();
 }
 
 function sum(items, key) {
@@ -1216,7 +1313,7 @@ function renderDespesas() {
     item.vencimento,
     statusBadge(item.status),
     item.rowKind === "fatura-cartao" ? "Fatura mensal" : recurrenceLabel(item),
-    item.rowKind === "fatura-cartao" ? cardExpenseActions(item) : actions("despesa", item.id, item.status !== "pago" ? "Marcar paga" : ""),
+    item.rowKind === "fatura-cartao" ? cardExpenseActions(item) : actions("despesa", item.id, item.status !== "pago" ? "Marcar paga" : "", !item.virtualOccurrence),
   ]);
 }
 
@@ -1308,13 +1405,13 @@ function renderRows(targetId, items, mapper) {
   });
 }
 
-function actions(type, id, completeLabel) {
+function actions(type, id, completeLabel, allowDelete = true) {
   if (readOnlyMode) return "";
   return `
     <div class="row-actions">
       ${completeLabel ? `<button class="small-button" data-action="complete" data-type="${type}" data-id="${id}">${completeLabel}</button>` : ""}
       <button class="small-button" data-action="edit" data-type="${type}" data-id="${id}">Editar</button>
-      <button class="danger-button" data-action="delete" data-type="${type}" data-id="${id}">Excluir</button>
+      ${allowDelete ? `<button class="danger-button" data-action="delete" data-type="${type}" data-id="${id}">Excluir</button>` : ""}
     </div>
   `;
 }
@@ -1326,7 +1423,7 @@ function receitaActions(item) {
       <button class="small-button" data-action="add-receipt" data-type="receita" data-id="${item.id}">Adicionar recebido</button>
       ${item.status !== "recebido" ? `<button class="small-button" data-action="complete" data-type="receita" data-id="${item.id}">Marcar recebida</button>` : ""}
       <button class="small-button" data-action="edit" data-type="receita" data-id="${item.id}">Editar</button>
-      <button class="danger-button" data-action="delete" data-type="receita" data-id="${item.id}">Excluir</button>
+      ${item.virtualOccurrence ? "" : `<button class="danger-button" data-action="delete" data-type="receita" data-id="${item.id}">Excluir</button>`}
     </div>
   `;
 }
@@ -1386,10 +1483,19 @@ async function handleRowAction(event) {
   }
 
   const schema = formSchemas[type];
-  const item = state[schema.collection].find((entry) => entry.id === id);
+  let item = findCollectionItem(schema.collection, id);
   if (!item) return;
 
-  if (action === "edit") openEntryForm(type, id);
+  if (action === "edit" && item.virtualOccurrence) {
+    openEntryForm(type, null, { ...item, recorrencia: "nao", repetirPorMeses: "" });
+    return;
+  }
+
+  if (item.virtualOccurrence && ["add-receipt", "complete"].includes(action)) {
+    item = materializeRecurringOccurrence(item);
+  }
+
+  if (action === "edit") openEntryForm(type, item.id);
   if (action === "add-receipt") {
     await addRecebimentoReceita(item);
     return;
