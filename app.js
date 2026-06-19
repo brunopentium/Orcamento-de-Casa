@@ -74,7 +74,6 @@ const formSchemas = {
       ["cartao", "Cartao", "text", true],
       ["fechamento", "Fechamento", "date", false],
       ["vencimento", "Vencimento", "date", true],
-      ["valorPrevisto", "Valor previsto", "number", true],
       ["valorRealizado", "Valor pago", "number", false],
       ["status", "Status", "select", true, ["previsto", "pago", "parcial", "atrasado"]],
       ["observacoes", "Observacoes", "textarea", false],
@@ -99,9 +98,9 @@ const formSchemas = {
       ["descricao", "Descricao", "text", false],
       ["cartao", "Cartao", "text", true],
       ["categoria", "Categoria", "category", true],
+      ["dataCompra", "Data da compra", "date", true],
       ["valorTotal", "Valor total", "number", true],
       ["parcelas", "Quantidade de parcelas", "number", true],
-      ["primeiraFatura", "Primeira fatura", "month", true],
       ["parcelaAtualCadastro", "Parcela atual nesta fatura", "number", false],
       ["recorrenciaCartao", "Repeticao", "select", true, ["pontual", "recorrente"]],
       ["observacoes", "Observacoes", "textarea", false],
@@ -175,7 +174,7 @@ const defaultState = {
 };
 
 const syncedCollections = ["receitas", "despesas", "cartoes", "faturas", "compras", "gastos", "investimentos"];
-const dateFields = ["data", "dataPrevista", "dataRealizada", "vencimento", "fechamento", "dataPagamento", "primeiraFatura"];
+const dateFields = ["data", "dataCompra", "dataPrevista", "dataRealizada", "vencimento", "fechamento", "dataPagamento", "primeiraFatura"];
 
 let state = loadState();
 let activeMonth = monthKey(new Date());
@@ -792,6 +791,7 @@ function isRecurringCardPurchase(item) {
 }
 
 function cardPurchaseFirstMonth(item) {
+  if (item.dataCompra) return cardInvoiceMonthForPurchase(item.cartao, item.dataCompra);
   return String(item.primeiraFatura || item.month || "").slice(0, 7);
 }
 
@@ -799,6 +799,14 @@ function cardPurchaseEffectiveFirstMonth(item) {
   const firstMonth = cardPurchaseFirstMonth(item);
   const registeredInstallment = Math.max(Number.parseInt(item.parcelaAtualCadastro, 10) || 1, 1);
   return registeredInstallment > 1 ? addMonths(firstMonth, -(registeredInstallment - 1)) : firstMonth;
+}
+
+function cardInvoiceMonthForPurchase(card, purchaseDate) {
+  const date = String(purchaseDate || "").slice(0, 10);
+  if (!date) return activeMonth;
+  const purchaseMonth = date.slice(0, 7);
+  const closingDate = cardClosingDate(card, null, purchaseMonth);
+  return date > closingDate ? addMonths(purchaseMonth, 1) : purchaseMonth;
 }
 
 function recurringPurchaseKey(item) {
@@ -1336,6 +1344,7 @@ function renderCartoes() {
   const purchases = activeCardName ? cardPurchasesForMonth(activeCardName) : [];
   renderRows("comprasTable", purchases, (item) => [
     item.descricao,
+    item.dataCompra || "",
     money(item.valorParcela),
     item.tipoCobranca === "recorrente" ? "Mensal" : `${item.parcelaAtual}/${item.parcelas || 1}`,
     money(item.valorTotal),
@@ -1645,6 +1654,16 @@ function openEntryForm(type, id = null, initialData = null) {
 }
 
 function renderExtraFormContent(type, item) {
+  if (type === "fatura") {
+    const card = item?.cartao || activeCardName;
+    const summary = calculatedCardInvoices(activeMonth).find((entry) => entry.cartao === card);
+    return `
+      <div class="form-note">
+        <strong>Valor previsto calculado: ${money(summary?.valorPrevisto || 0)}</strong>
+        <p>Este valor vem automaticamente das compras, parcelas e recorrencias do cartao neste mes.</p>
+      </div>
+    `;
+  }
   if (type !== "receita" || !item) return "";
   const recebimentos = parseRecebimentos(item);
   const rows = recebimentos.length
@@ -1661,7 +1680,11 @@ function renderExtraFormContent(type, item) {
 }
 
 function renderField([name, label, type, required, options], item) {
-  const value = item?.[name] ?? defaultFieldValue(name, type);
+  let value = item?.[name] ?? defaultFieldValue(name, type);
+  if (name === "dataCompra" && !item?.dataCompra && item) {
+    const fallbackMonth = String(item.primeiraFatura || item.month || activeMonth).slice(0, 7);
+    value = dateInMonth(item.primeiraFatura || item.month || activeMonth, fallbackMonth);
+  }
   const requiredAttr = required ? "required" : "";
   if (name === "cartao" && type === "text") {
     const cards = getCardNames();
@@ -1711,6 +1734,7 @@ async function handleEntrySubmit(event) {
   });
   applyDefaultDescription(data);
   normalizeCardPurchaseFormData(data);
+  normalizeCardInvoiceFormData(data);
 
   const existing = editingId ? state[schema.collection].find((entry) => entry.id === editingId) : null;
   if (existing) {
@@ -1749,11 +1773,18 @@ function normalizeCardPurchaseFormData(data) {
   const installments = Math.max(Number.parseInt(data.parcelas, 10) || 1, 1);
   data.parcelas = installments;
   data.parcelaAtualCadastro = Math.min(Math.max(Number.parseInt(data.parcelaAtualCadastro, 10) || 1, 1), installments);
+  data.primeiraFatura = cardInvoiceMonthForPurchase(data.cartao, data.dataCompra);
 
   if (data.recorrenciaCartao === "recorrente") {
     data.parcelas = 1;
     data.parcelaAtualCadastro = 1;
   }
+}
+
+function normalizeCardInvoiceFormData(data) {
+  if (currentFormType !== "fatura") return;
+  const summary = calculatedCardInvoices(activeMonth).find((item) => item.cartao === data.cartao);
+  data.valorPrevisto = summary?.valorPrevisto || 0;
 }
 
 function inferMonth(data) {
