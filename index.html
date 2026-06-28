@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260628-simulation1" />
+    <link rel="stylesheet" href="styles.css?v=20260628-simulation2" />
   </head>
   <body>
     <aside class="sidebar">
@@ -444,7 +444,32 @@
               <input id="simulationNameInput" type="text" />
             </label>
             <button class="secondary-button" id="resetSimulationButton">Restaurar itens</button>
-            <p class="simulation-note">Use os checkboxes para remover itens apenas desta simulacao.</p>
+            <form class="simulation-add-form" id="simulationAddForm">
+              <h4>Adicionar item temporario</h4>
+              <label>
+                Tipo
+                <select name="type">
+                  <option value="receita">Receita</option>
+                  <option value="despesa">Despesa geral</option>
+                  <option value="gasto">Gasto geral</option>
+                  <option value="cartao">Cartao</option>
+                </select>
+              </label>
+              <label>
+                Descricao
+                <input name="label" type="text" required />
+              </label>
+              <label>
+                Categoria
+                <input name="category" type="text" />
+              </label>
+              <label>
+                Valor
+                <input name="value" type="number" min="0" step="0.01" required />
+              </label>
+              <button class="secondary-button" type="submit">Adicionar na simulacao</button>
+            </form>
+            <p class="simulation-note">Use os checkboxes para remover itens e os campos de valor para simular ajustes. Nada e salvo na planilha.</p>
           </aside>
 
           <section class="simulation-content">
@@ -515,6 +540,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260628-simulation1"></script>
+  <script src="app.js?v=20260628-simulation2"></script>
 </body>
 </html>

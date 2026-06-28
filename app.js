@@ -204,6 +204,7 @@ const dom = {
   simulationMonthInput: document.querySelector("#simulationMonthInput"),
   simulationNameInput: document.querySelector("#simulationNameInput"),
   resetSimulationButton: document.querySelector("#resetSimulationButton"),
+  simulationAddForm: document.querySelector("#simulationAddForm"),
   simulationSummary: document.querySelector("#simulationSummary"),
   simulationSections: document.querySelector("#simulationSections"),
 };
@@ -1013,6 +1014,8 @@ function bindEvents() {
   dom.simulationNameInput?.addEventListener("change", handleSimulationNameChange);
   dom.simulationTabs?.addEventListener("click", handleSimulationTabClick);
   dom.simulationSections?.addEventListener("change", handleSimulationToggle);
+  dom.simulationSections?.addEventListener("change", handleSimulationValueInput);
+  dom.simulationAddForm?.addEventListener("submit", handleSimulationAddItem);
   document.querySelector("#dashboardView").addEventListener("click", handleDashboardDrillClick);
   document.querySelector("#dashboardView").addEventListener("keydown", (event) => {
     if ((event.key === "Enter" || event.key === " ") && event.target?.dataset?.drillKey) {
@@ -1443,6 +1446,8 @@ function createSimulation(name, month) {
     name,
     month,
     excluded: {},
+    overrides: {},
+    customItems: [],
   };
 }
 
@@ -1461,6 +1466,8 @@ function resetActiveSimulation() {
   const simulation = activeSimulation();
   if (!simulation) return;
   simulation.excluded = {};
+  simulation.overrides = {};
+  simulation.customItems = [];
   renderSimulacoes();
 }
 
@@ -1469,6 +1476,8 @@ function handleSimulationMonthChange() {
   if (!simulation) return;
   simulation.month = dom.simulationMonthInput.value || activeMonth;
   simulation.excluded = {};
+  simulation.overrides = {};
+  simulation.customItems = [];
   renderSimulacoes();
 }
 
@@ -1495,9 +1504,40 @@ function handleSimulationToggle(event) {
   renderSimulacoes();
 }
 
+function handleSimulationValueInput(event) {
+  const input = event.target.closest("[data-simulation-value-key]");
+  if (!input) return;
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  const value = parseMoney(input.value);
+  simulation.overrides[input.dataset.simulationValueKey] = value;
+  renderSimulacoes();
+}
+
+function handleSimulationAddItem(event) {
+  event.preventDefault();
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  const data = Object.fromEntries(new FormData(dom.simulationAddForm).entries());
+  const value = parseMoney(data.value);
+  if (!data.label || value <= 0) return;
+  simulation.customItems.push({
+    id: `custom-${crypto.randomUUID()}`,
+    type: data.type,
+    label: data.label.trim(),
+    category: data.category.trim(),
+    value,
+    date: `${simulation.month}-01`,
+  });
+  dom.simulationAddForm.reset();
+  renderSimulacoes();
+}
+
 function buildSimulationModel(simulation) {
   const month = simulation.month;
   const excluded = simulation.excluded || {};
+  const overrides = simulation.overrides || {};
+  const customRows = (simulation.customItems || []).map((item) => simulationCustomRow(item));
   const receitas = recurringMonthItems("receitas", month).map((item) => simulationRow("receita", item, item.descricao, receitaValorRecebido(item), item.valorPrevisto));
   const despesas = effectiveExpenseRows(recurringMonthItems("despesas", month))
     .filter((item) => !isGeneralSpendingExpense(item) && !isCardExpensePlaceholder(item))
@@ -1510,12 +1550,19 @@ function buildSimulationModel(simulation) {
   const investimentos = (state.investimentos || [])
     .filter((item) => belongsToMonthFor(item, month))
     .map((item) => simulationRow("investimento", item, item.descricao, investmentSignedValue(item), investmentSignedValue(item), item.tipo));
+  const allRows = {
+    receitas: [...receitas, ...customRows.filter((item) => item.type === "receita")].map((item) => applySimulationOverride(item, overrides)),
+    despesas: [...despesas, ...customRows.filter((item) => item.type === "despesa")].map((item) => applySimulationOverride(item, overrides)),
+    cardPurchases: [...cardPurchases, ...customRows.filter((item) => item.type === "cartao")].map((item) => applySimulationOverride(item, overrides)),
+    gastos: [...gastos, ...customRows.filter((item) => item.type === "gasto")].map((item) => applySimulationOverride(item, overrides)),
+    investimentos: investimentos.map((item) => applySimulationOverride(item, overrides)),
+  };
 
-  const activeReceitas = receitas.filter((item) => !excluded[item.key]);
-  const activeDespesas = despesas.filter((item) => !excluded[item.key]);
-  const activeCardPurchases = cardPurchases.filter((item) => !excluded[item.key]);
-  const activeGastos = gastos.filter((item) => !excluded[item.key]);
-  const activeInvestimentos = investimentos.filter((item) => !excluded[item.key]);
+  const activeReceitas = allRows.receitas.filter((item) => !excluded[item.key]);
+  const activeDespesas = allRows.despesas.filter((item) => !excluded[item.key]);
+  const activeCardPurchases = allRows.cardPurchases.filter((item) => !excluded[item.key]);
+  const activeGastos = allRows.gastos.filter((item) => !excluded[item.key]);
+  const activeInvestimentos = allRows.investimentos.filter((item) => !excluded[item.key]);
 
   const totals = {
     receitasPrevistas: activeReceitas.reduce((total, item) => total + parseMoney(item.previsto), 0),
@@ -1535,11 +1582,11 @@ function buildSimulationModel(simulation) {
     excluded,
     totals,
     sections: [
-      { title: "Receitas", rows: receitas, valueLabel: "Recebido / previsto" },
-      { title: "Despesas gerais sem consolidados", rows: despesas, valueLabel: "Pago / previsto" },
-      { title: "Compras e parcelas dos cartoes", rows: cardPurchases, valueLabel: "Valor no mes" },
-      { title: "Gastos gerais do envelope", rows: gastos, valueLabel: "Valor" },
-      { title: "Investimentos", rows: investimentos, valueLabel: "Movimento" },
+      { title: "Receitas", rows: allRows.receitas, valueLabel: "Valor simulado" },
+      { title: "Despesas gerais sem consolidados", rows: allRows.despesas, valueLabel: "Valor simulado" },
+      { title: "Compras e parcelas dos cartoes", rows: allRows.cardPurchases, valueLabel: "Valor simulado" },
+      { title: "Gastos gerais do envelope", rows: allRows.gastos, valueLabel: "Valor simulado" },
+      { title: "Investimentos", rows: allRows.investimentos, valueLabel: "Movimento" },
     ],
   };
 }
@@ -1553,6 +1600,30 @@ function simulationRow(type, item, label, realized, planned, category = "") {
     date: item.data || item.dataPrevista || item.vencimento || item.primeiraFatura || "",
     realizado: parseMoney(realized),
     previsto: parseMoney(planned),
+  };
+}
+
+function simulationCustomRow(item) {
+  return {
+    key: item.id,
+    type: item.type,
+    label: item.label,
+    category: item.category || "Simulado",
+    date: item.date || "",
+    realizado: parseMoney(item.value),
+    previsto: parseMoney(item.value),
+    custom: true,
+  };
+}
+
+function applySimulationOverride(item, overrides) {
+  if (!Object.hasOwn(overrides, item.key)) return item;
+  const value = parseMoney(overrides[item.key]);
+  return {
+    ...item,
+    realizado: value,
+    previsto: value,
+    overridden: true,
   };
 }
 
@@ -1591,17 +1662,18 @@ function renderSimulationRows(rows, excluded) {
       ${rows
         .map((item) => {
           const checked = !excluded[item.key];
-          const mainValue = item.type === "receita" || item.type === "despesa"
-            ? `${money(item.realizado)} / ${money(item.previsto)}`
-            : money(item.realizado || item.previsto);
+          const currentValue = item.type === "receita" || item.type === "despesa" ? item.previsto : item.realizado || item.previsto;
           return `
             <label class="simulation-row ${checked ? "" : "excluded"}">
               <input type="checkbox" data-simulation-key="${escapeHtml(item.key)}" ${checked ? "checked" : ""} />
               <span>
-                <strong>${escapeHtml(item.label)}</strong>
+                <strong>${escapeHtml(item.label)}${item.custom ? ' <small class="simulation-chip">simulado</small>' : ""}</strong>
                 <small>${escapeHtml([item.category, String(item.date).slice(0, 10)].filter(Boolean).join(" | "))}</small>
               </span>
-              <strong>${mainValue}</strong>
+              <span class="simulation-value">
+                <input type="number" min="0" step="0.01" value="${escapeHtml(currentValue)}" data-simulation-value-key="${escapeHtml(item.key)}" />
+                <small>${item.overridden ? "alterado" : "valor"}</small>
+              </span>
             </label>
           `;
         })

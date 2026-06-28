@@ -1057,6 +1057,18 @@ dialog::backdrop {
   line-height: 1.4;
 }
 
+.simulation-add-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.simulation-add-form h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
 .simulation-content {
   display: grid;
   gap: 16px;
@@ -1106,7 +1118,7 @@ dialog::backdrop {
 
 .simulation-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(120px, 150px);
   gap: 10px;
   align-items: center;
   padding: 10px;
@@ -1129,6 +1141,31 @@ dialog::backdrop {
 .simulation-row.excluded span,
 .simulation-row.excluded > strong {
   text-decoration: line-through;
+}
+
+.simulation-value {
+  display: grid;
+  gap: 2px;
+}
+
+.simulation-value input {
+  width: 100%;
+  min-height: 36px;
+}
+
+.simulation-value small {
+  text-align: right;
+}
+
+.simulation-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--primary-2);
+  background: #d8efe1;
+  font-size: 11px;
+  text-decoration: none;
 }
 
 @media (max-width: 1000px) {
