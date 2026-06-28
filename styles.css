@@ -1014,6 +1014,123 @@ dialog::backdrop {
   padding: 18px 0;
 }
 
+.simulation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.simulation-tab {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 800;
+}
+
+.simulation-tab.active {
+  color: #ffffff;
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.simulation-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.simulation-controls {
+  align-self: start;
+  display: grid;
+  gap: 12px;
+}
+
+.simulation-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.simulation-content {
+  display: grid;
+  gap: 16px;
+}
+
+.simulation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.simulation-metric {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.simulation-metric span,
+.simulation-metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-metric strong {
+  display: block;
+  margin: 6px 0;
+  font-size: 22px;
+}
+
+.simulation-metric.emphasis {
+  border-color: rgba(34, 106, 92, 0.28);
+  background: #f0f7f3;
+}
+
+.simulation-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.simulation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.simulation-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.simulation-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.simulation-row.excluded {
+  opacity: 0.48;
+  background: var(--surface-2);
+}
+
+.simulation-row.excluded span,
+.simulation-row.excluded > strong {
+  text-decoration: line-through;
+}
+
 @media (max-width: 1000px) {
   body {
     grid-template-columns: 1fr;
@@ -1033,7 +1150,9 @@ dialog::backdrop {
   .section-grid,
   .dashboard-visual-grid,
   .dashboard-overview,
-  .quick-layout {
+  .quick-layout,
+  .simulation-layout,
+  .simulation-summary {
     grid-template-columns: 1fr;
   }
 

@@ -183,6 +183,8 @@ let currentFormType = null;
 let editingId = null;
 let dashboardDrilldowns = new Map();
 let appStarted = false;
+let simulations = [];
+let activeSimulationId = "";
 
 const dom = {
   pageTitle: document.querySelector("#pageTitle"),
@@ -197,6 +199,13 @@ const dom = {
   gastoRapidoForm: document.querySelector("#gastoRapidoForm"),
   configForm: document.querySelector("#configForm"),
   syncStatus: document.querySelector("#syncStatus"),
+  addSimulationButton: document.querySelector("#addSimulationButton"),
+  simulationTabs: document.querySelector("#simulationTabs"),
+  simulationMonthInput: document.querySelector("#simulationMonthInput"),
+  simulationNameInput: document.querySelector("#simulationNameInput"),
+  resetSimulationButton: document.querySelector("#resetSimulationButton"),
+  simulationSummary: document.querySelector("#simulationSummary"),
+  simulationSections: document.querySelector("#simulationSections"),
 };
 
 function sample(collection, data) {
@@ -998,6 +1007,12 @@ function bindEvents() {
     dom.gastoRapidoForm.addEventListener("submit", handleQuickGasto);
     dom.configForm.addEventListener("submit", handleConfigSubmit);
   }
+  dom.addSimulationButton?.addEventListener("click", addSimulation);
+  dom.resetSimulationButton?.addEventListener("click", resetActiveSimulation);
+  dom.simulationMonthInput?.addEventListener("change", handleSimulationMonthChange);
+  dom.simulationNameInput?.addEventListener("change", handleSimulationNameChange);
+  dom.simulationTabs?.addEventListener("click", handleSimulationTabClick);
+  dom.simulationSections?.addEventListener("change", handleSimulationToggle);
   document.querySelector("#dashboardView").addEventListener("click", handleDashboardDrillClick);
   document.querySelector("#dashboardView").addEventListener("keydown", (event) => {
     if ((event.key === "Enter" || event.key === " ") && event.target?.dataset?.drillKey) {
@@ -1022,6 +1037,7 @@ function switchView(view) {
     cartoes: "Cartoes",
     gastos: "Gastos gerais",
     investimentos: "Investimentos",
+    simulacoes: "Simulacoes",
     config: "Configuracoes",
   };
   dom.pageTitle.textContent = labels[view];
@@ -1048,6 +1064,7 @@ function render() {
   renderCartoes();
   renderGastos();
   renderInvestimentos();
+  renderSimulacoes();
   renderConfig();
 }
 
@@ -1390,6 +1407,207 @@ function renderInvestimentos() {
     item.origemDestino || "",
     actions("investimento", item.id, ""),
   ]);
+}
+
+function renderSimulacoes() {
+  if (!dom.simulationTabs) return;
+  ensureSimulation();
+  const simulation = activeSimulation();
+  if (!simulation) return;
+
+  dom.simulationTabs.innerHTML = simulations
+    .map((item, index) => `
+      <button class="simulation-tab ${item.id === activeSimulationId ? "active" : ""}" data-simulation-id="${item.id}">
+        ${escapeHtml(item.name || `Simulacao ${index + 1}`)}
+      </button>
+    `)
+    .join("");
+  dom.simulationMonthInput.value = simulation.month;
+  dom.simulationNameInput.value = simulation.name;
+
+  const model = buildSimulationModel(simulation);
+  renderSimulationSummary(model);
+  renderSimulationSections(model, simulation);
+}
+
+function ensureSimulation() {
+  if (simulations.length) return;
+  const first = createSimulation("Simulacao 1", activeMonth);
+  simulations.push(first);
+  activeSimulationId = first.id;
+}
+
+function createSimulation(name, month) {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    month,
+    excluded: {},
+  };
+}
+
+function activeSimulation() {
+  return simulations.find((item) => item.id === activeSimulationId) || simulations[0];
+}
+
+function addSimulation() {
+  const next = createSimulation(`Simulacao ${simulations.length + 1}`, activeSimulation()?.month || activeMonth);
+  simulations.push(next);
+  activeSimulationId = next.id;
+  renderSimulacoes();
+}
+
+function resetActiveSimulation() {
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  simulation.excluded = {};
+  renderSimulacoes();
+}
+
+function handleSimulationMonthChange() {
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  simulation.month = dom.simulationMonthInput.value || activeMonth;
+  simulation.excluded = {};
+  renderSimulacoes();
+}
+
+function handleSimulationNameChange() {
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  simulation.name = dom.simulationNameInput.value.trim() || simulation.name;
+  renderSimulacoes();
+}
+
+function handleSimulationTabClick(event) {
+  const button = event.target.closest("[data-simulation-id]");
+  if (!button) return;
+  activeSimulationId = button.dataset.simulationId;
+  renderSimulacoes();
+}
+
+function handleSimulationToggle(event) {
+  const input = event.target.closest("[data-simulation-key]");
+  if (!input) return;
+  const simulation = activeSimulation();
+  if (!simulation) return;
+  simulation.excluded[input.dataset.simulationKey] = !input.checked;
+  renderSimulacoes();
+}
+
+function buildSimulationModel(simulation) {
+  const month = simulation.month;
+  const excluded = simulation.excluded || {};
+  const receitas = recurringMonthItems("receitas", month).map((item) => simulationRow("receita", item, item.descricao, receitaValorRecebido(item), item.valorPrevisto));
+  const despesas = effectiveExpenseRows(recurringMonthItems("despesas", month))
+    .filter((item) => !isGeneralSpendingExpense(item) && !isCardExpensePlaceholder(item))
+    .map((item) => simulationRow("despesa", item, item.descricao, parseMoney(item.valorRealizado), item.valorPrevisto));
+  const cardPurchases = getCardNames()
+    .flatMap((card) => cardPurchasesForMonth(card, month).map((item) => simulationRow("cartao", item, `${card} - ${item.descricao}`, parseMoney(item.valorParcela), item.valorParcela, item.categoria)));
+  const gastos = (state.gastos || [])
+    .filter((item) => belongsToMonthFor(item, month))
+    .map((item) => simulationRow("gasto", item, item.descricao, parseMoney(item.valor), item.valor, item.categoria));
+  const investimentos = (state.investimentos || [])
+    .filter((item) => belongsToMonthFor(item, month))
+    .map((item) => simulationRow("investimento", item, item.descricao, investmentSignedValue(item), investmentSignedValue(item), item.tipo));
+
+  const activeReceitas = receitas.filter((item) => !excluded[item.key]);
+  const activeDespesas = despesas.filter((item) => !excluded[item.key]);
+  const activeCardPurchases = cardPurchases.filter((item) => !excluded[item.key]);
+  const activeGastos = gastos.filter((item) => !excluded[item.key]);
+  const activeInvestimentos = investimentos.filter((item) => !excluded[item.key]);
+
+  const totals = {
+    receitasPrevistas: activeReceitas.reduce((total, item) => total + parseMoney(item.previsto), 0),
+    receitasRecebidas: activeReceitas.reduce((total, item) => total + parseMoney(item.realizado), 0),
+    despesasPrevistas: activeDespesas.reduce((total, item) => total + parseMoney(item.previsto), 0),
+    despesasPagas: activeDespesas.reduce((total, item) => total + parseMoney(item.realizado), 0),
+    cartoesPrevistos: activeCardPurchases.reduce((total, item) => total + parseMoney(item.previsto), 0),
+    gastosUsados: activeGastos.reduce((total, item) => total + parseMoney(item.realizado), 0),
+    investimentos: activeInvestimentos.reduce((total, item) => total + parseMoney(item.realizado), 0),
+  };
+  totals.saldoPrevisto = totals.receitasPrevistas - totals.despesasPrevistas - totals.cartoesPrevistos;
+  totals.saldoAtual = totals.receitasRecebidas - totals.despesasPagas;
+  totals.resultadoComGastos = totals.saldoPrevisto - totals.gastosUsados;
+
+  return {
+    month,
+    excluded,
+    totals,
+    sections: [
+      { title: "Receitas", rows: receitas, valueLabel: "Recebido / previsto" },
+      { title: "Despesas gerais sem consolidados", rows: despesas, valueLabel: "Pago / previsto" },
+      { title: "Compras e parcelas dos cartoes", rows: cardPurchases, valueLabel: "Valor no mes" },
+      { title: "Gastos gerais do envelope", rows: gastos, valueLabel: "Valor" },
+      { title: "Investimentos", rows: investimentos, valueLabel: "Movimento" },
+    ],
+  };
+}
+
+function simulationRow(type, item, label, realized, planned, category = "") {
+  return {
+    key: `${type}:${item.id}`,
+    type,
+    label: label || "Sem descricao",
+    category: category || item.categoria || "",
+    date: item.data || item.dataPrevista || item.vencimento || item.primeiraFatura || "",
+    realizado: parseMoney(realized),
+    previsto: parseMoney(planned),
+  };
+}
+
+function renderSimulationSummary(model) {
+  const t = model.totals;
+  dom.simulationSummary.innerHTML = `
+    <article class="simulation-metric"><span>Receitas previstas</span><strong>${money(t.receitasPrevistas)}</strong><small>Recebidas: ${money(t.receitasRecebidas)}</small></article>
+    <article class="simulation-metric"><span>Despesas fixas</span><strong>${money(t.despesasPrevistas)}</strong><small>Pagas: ${money(t.despesasPagas)}</small></article>
+    <article class="simulation-metric"><span>Cartoes</span><strong>${money(t.cartoesPrevistos)}</strong><small>Compras e parcelas ativas</small></article>
+    <article class="simulation-metric"><span>Gastos gerais</span><strong>${money(t.gastosUsados)}</strong><small>Envelope simulado</small></article>
+    <article class="simulation-metric emphasis"><span>Saldo previsto</span><strong>${money(t.saldoPrevisto)}</strong><small>Receitas - despesas - cartoes</small></article>
+    <article class="simulation-metric emphasis"><span>Resultado com gastos gerais</span><strong>${money(t.resultadoComGastos)}</strong><small>Saldo previsto - gastos gerais</small></article>
+  `;
+}
+
+function renderSimulationSections(model, simulation) {
+  dom.simulationSections.innerHTML = model.sections
+    .map((section) => `
+      <article class="panel simulation-section">
+        <div class="panel-heading">
+          <div>
+            <h3>${escapeHtml(section.title)}</h3>
+            <p>${escapeHtml(section.valueLabel)}</p>
+          </div>
+        </div>
+        ${renderSimulationRows(section.rows, simulation.excluded)}
+      </article>
+    `)
+    .join("");
+}
+
+function renderSimulationRows(rows, excluded) {
+  if (!rows.length) return `<p class="empty">Nenhum item neste mes.</p>`;
+  return `
+    <div class="simulation-list">
+      ${rows
+        .map((item) => {
+          const checked = !excluded[item.key];
+          const mainValue = item.type === "receita" || item.type === "despesa"
+            ? `${money(item.realizado)} / ${money(item.previsto)}`
+            : money(item.realizado || item.previsto);
+          return `
+            <label class="simulation-row ${checked ? "" : "excluded"}">
+              <input type="checkbox" data-simulation-key="${escapeHtml(item.key)}" ${checked ? "checked" : ""} />
+              <span>
+                <strong>${escapeHtml(item.label)}</strong>
+                <small>${escapeHtml([item.category, String(item.date).slice(0, 10)].filter(Boolean).join(" | "))}</small>
+              </span>
+              <strong>${mainValue}</strong>
+            </label>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function renderConfig() {

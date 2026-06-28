@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260609-logo2" />
+    <link rel="stylesheet" href="styles.css?v=20260628-simulation1" />
   </head>
   <body>
     <aside class="sidebar">
@@ -27,6 +27,7 @@
         <button class="nav-item" data-view="cartoes">Cartoes</button>
         <button class="nav-item" data-view="gastos">Gastos gerais</button>
         <button class="nav-item" data-view="investimentos">Investimentos</button>
+        <button class="nav-item" data-view="simulacoes">Simulacoes</button>
         <button class="nav-item" data-view="config">Configuracoes</button>
       </nav>
     </aside>
@@ -420,6 +421,39 @@
         </div>
       </section>
 
+      <section class="view" id="simulacoesView">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>Simulacoes</h3>
+              <p>Cenarios temporarios. Nada aqui altera a planilha ou os lancamentos reais.</p>
+            </div>
+            <button class="primary-button" id="addSimulationButton">Nova simulacao</button>
+          </div>
+          <div class="simulation-tabs" id="simulationTabs"></div>
+        </div>
+
+        <div class="simulation-layout">
+          <aside class="panel simulation-controls">
+            <label>
+              Mes da simulacao
+              <input id="simulationMonthInput" type="month" />
+            </label>
+            <label>
+              Nome
+              <input id="simulationNameInput" type="text" />
+            </label>
+            <button class="secondary-button" id="resetSimulationButton">Restaurar itens</button>
+            <p class="simulation-note">Use os checkboxes para remover itens apenas desta simulacao.</p>
+          </aside>
+
+          <section class="simulation-content">
+            <div class="simulation-summary" id="simulationSummary"></div>
+            <div class="simulation-sections" id="simulationSections"></div>
+          </section>
+        </div>
+      </section>
+
       <section class="view" id="configView">
         <div class="section-grid">
           <form class="panel" id="configForm">
@@ -481,6 +515,6 @@
       </form>
     </dialog>
 
-  <script src="app.js?v=20260619-carddate1"></script>
+  <script src="app.js?v=20260628-simulation1"></script>
 </body>
 </html>
